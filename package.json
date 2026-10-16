@@ -16,11 +16,14 @@
     "jobs:startups": "node src/jobs/index.js --source google-sheet --no-email",
     "jobs:startups:playwright": "node src/jobs/index.js --source google-sheet --playwright --no-email",
     "jobs:startups:email": "node src/jobs/index.js --source google-sheet",
-    "jobs:all": "node src/jobs/index.js --source both"
+    "jobs:all": "node src/jobs/index.js --source both",
+    "ui": "node src/server.js",
+    "dev": "node src/server.js"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
     "dotenv": "^16.4.7",
+    "express": "^5.3.0",
     "nodemailer": "^7.0.3",
     "playwright": "^1.55.0",
     "xlsx": "^0.18.5"

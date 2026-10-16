@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Job Hunter — Autonomous Career & Job Intelligence Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <div class="brand-logo">
+            <span class="logo-icon">⚡</span>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">AI Job Hunter</span>
+            <span class="brand-subtitle">Autonomous Career Intelligence</span>
+          </div>
+        </div>
+        <div class="candidate-pill">
+          <span class="pill-dot"></span>
+          <span class="pill-text"><strong>Yash Giradkar</strong> · GenAI / LLM + Backend (2–4 YOE)</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-indicator" id="systemStatusBadge">
+          <span class="status-pulse" id="statusDot"></span>
+          <span class="status-text" id="statusText">System Ready</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btnRefreshAll" title="Refresh datasets">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary btn-sm" id="btnQuickScan" title="Launch Quick Scan">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Quick Scan
+        </button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- Left Navigation Sidebar -->
+      <aside class="sidebar">
+        <nav class="nav-menu">
+          <button class="nav-item active" data-tab="tab-jobs">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-label">Job Intelligence</span>
+            <span class="nav-badge" id="badgeMatchedCount">0</span>
+          </button>
+          <button class="nav-item" data-tab="tab-queue">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Application Queue</span>
+            <span class="nav-badge badge-warning" id="badgeQueueCount">0</span>
+          </button>
+          <button class="nav-item" data-tab="tab-workflows">
+            <span class="nav-icon">🚀</span>
+            <span class="nav-label">Workflow Runner</span>
+            <span class="nav-badge badge-active" id="badgeRunnerStatus">Idle</span>
+          </button>
+          <button class="nav-item" data-tab="tab-outreach">
+            <span class="nav-icon">📬</span>
+            <span class="nav-label">Cold Outreach</span>
+            <span class="nav-badge" id="badgeOutreachCount">0</span>
+          </button>
+          <button class="nav-item" data-tab="tab-interviews">
+            <span class="nav-icon">💼</span>
+            <span class="nav-label">Interview Prep</span>
+            <span class="nav-badge badge-info" id="badgeInterviewCount">0</span>
+          </button>
+          <button class="nav-item" data-tab="tab-report">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Executive Report</span>
+          </button>
+          <button class="nav-item" data-tab="tab-settings">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Profile & Config</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="resume-card">
+            <div class="resume-header">
+              <span class="resume-icon">📄</span>
+              <span class="resume-label">Target Resume</span>
+            </div>
+            <div class="resume-name">Yash_Giradkar_Resume.pdf</div>
+            <div class="resume-status" id="resumeStatusIndicator">
+              <span class="badge badge-success">✓ Verified on disk</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+
+        <!-- ======================================================== -->
+        <!-- TAB 1: Job Intelligence -->
+        <!-- ======================================================== -->
+        <section class="tab-pane active" id="tab-jobs">
+          <!-- Stat Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">Discovered Jobs</span>
+                <span class="metric-badge">All Portals</span>
+              </div>
+              <div class="metric-value" id="statDiscovered">0</div>
+              <div class="metric-sub" id="statDiscoveredSub">Across 639+ companies</div>
+            </div>
+            <div class="metric-card metric-primary">
+              <div class="metric-header">
+                <span class="metric-title">Matched Candidate</span>
+                <span class="metric-badge badge-emerald">Profile Overlap</span>
+              </div>
+              <div class="metric-value text-emerald" id="statMatched">0</div>
+              <div class="metric-sub">Generative AI + Backend</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">High Priority (≥70)</span>
+                <span class="metric-badge badge-amber">Ready to Apply</span>
+              </div>
+              <div class="metric-value text-amber" id="statQueue">0</div>
+              <div class="metric-sub">Held in Approval Queue</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">Fresh (Last 48h)</span>
+                <span class="metric-badge badge-blue">New Openings</span>
+              </div>
+              <div class="metric-value text-blue" id="statRecent">0</div>
+              <div class="metric-sub">0–2 days posting age</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">Filtered / Rejected</span>
+                <span class="metric-badge badge-rose">Out of Scope</span>
+              </div>
+              <div class="metric-value text-rose" id="statRejected">0</div>
+              <div class="metric-sub">5+ YOE or Low Score</div>
+            </div>
+          </div>
+
+          <!-- Controls Bar: Search & Filters -->
+          <div class="controls-card">
+            <div class="search-box">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="jobSearchInput" placeholder="Search by role, company, skills, or location...">
+            </div>
+
+            <div class="filter-group">
+              <select id="filterCategory" class="select-input">
+                <option value="all">All Categories</option>
+                <option value="Generative AI">Generative AI</option>
+                <option value="LLM Engineer">LLM Engineer</option>
+                <option value="AI Engineer">AI Engineer</option>
+                <option value="Backend">Backend</option>
+                <option value="Full Stack">Full Stack</option>
+                <option value="Distributed Systems">Distributed Systems</option>
+              </select>
+
+              <select id="filterLocation" class="select-input">
+                <option value="all">All Locations</option>
+                <option value="Remote">Remote Only</option>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="India">India</option>
+                <option value="International">International</option>
+              </select>
+
+              <select id="filterMinScore" class="select-input">
+                <option value="0">All Match Scores</option>
+                <option value="90">90%+ Match Only</option>
+                <option value="75">75%+ Match (High)</option>
+                <option value="60">60%+ Match</option>
+              </select>
+
+              <div class="btn-group">
+                <button class="btn btn-sm btn-outline active" id="btnViewMatched">Matched (101)</button>
+                <button class="btn btn-sm btn-outline" id="btnViewAll">All Scanned</button>
+                <button class="btn btn-sm btn-outline" id="btnViewRejected">Rejected</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Jobs Table Container -->
+          <div class="table-card">
+            <div class="table-header-info">
+              <div class="table-title-area">
+                <h3 class="table-title" id="jobsTableTitle">Master Matched Jobs</h3>
+                <span class="table-subtitle" id="jobsTableSubtitle">Showing candidate-aligned opportunities</span>
+              </div>
+              <div class="table-actions">
+                <button class="btn btn-sm btn-secondary" id="btnExportJobsJson">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Export JSON
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table" id="jobsTable">
+                <thead>
+                  <tr>
+                    <th>Match</th>
+                    <th>Company</th>
+                    <th>Role Title</th>
+                    <th>Location</th>
+                    <th>Experience</th>
+                    <th>Salary (LPA)</th>
+                    <th>Key Skills</th>
+                    <th>Freshness</th>
+                    <th>Resume</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="jobsTableBody">
+                  <!-- Dynamically populated -->
+                  <tr><td colspan="10" class="text-center py-6 text-muted">Loading jobs data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="table-footer">
+              <span id="jobsCountDisplay">Showing 0 of 0 jobs</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 2: Application Queue -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-queue">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">📋 High-Priority Application Queue</h2>
+              <p class="section-subtitle">Opportunities with Match Score ≥ 70% and verified 2–4 years experience. Human approval required before submission.</p>
+            </div>
+            <div class="queue-actions">
+              <button class="btn btn-emerald btn-sm" id="btnApproveAll">Approve All</button>
+            </div>
+          </div>
+
+          <div class="queue-grid" id="queueCardsContainer">
+            <!-- Dynamically populated with Queue Cards -->
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 3: Workflow Runner -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-workflows">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">🚀 Autonomous Workflow Runner</h2>
+              <p class="section-subtitle">Execute crawlers, intelligence scoring, email outreach campaigns, or interview prep pipelines with one click.</p>
+            </div>
+          </div>
+
+          <div class="workflow-cards-grid">
+            <!-- Workflow 1: Google Sheet Startups -->
+            <div class="workflow-card">
+              <div class="wf-badge badge-emerald">Agentic AI Startups</div>
+              <h3 class="wf-title">Agentic AI Startups Master Scan</h3>
+              <p class="wf-desc">Crawl all 86+ startups from the Google Sheet master list (Devin, Cursor, Poolside, LangChain, CrewAI) and match against 2–4 YOE.</p>
+              <div class="wf-params">
+                <label class="param-row">
+                  <span>Batch Limit:</span>
+                  <input type="number" class="input-sm" id="wfStartupsLimit" value="25" min="1" max="150">
+                </label>
+                <label class="param-row">
+                  <span>Playwright Browser:</span>
+                  <input type="checkbox" id="wfStartupsPlaywright" checked>
+                </label>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="launchWorkflow('jobs-startups', { limit: document.getElementById('wfStartupsLimit').value, usePlaywright: document.getElementById('wfStartupsPlaywright').checked })">
+                Run Startups Scan
+              </button>
+            </div>
+
+            <!-- Workflow 2: Companies Markdown -->
+            <div class="workflow-card">
+              <div class="wf-badge badge-blue">Authoritative List</div>
+              <h3 class="wf-title">639+ Companies.md Scan</h3>
+              <p class="wf-desc">Run discovery across the 639 top tech companies in /jobs/companies.md (Databricks, Meta, Netflix, OpenAI, Stripe) with ATS detection.</p>
+              <div class="wf-params">
+                <label class="param-row">
+                  <span>Batch Limit:</span>
+                  <input type="number" class="input-sm" id="wfCompaniesLimit" value="20" min="1" max="642">
+                </label>
+                <label class="param-row">
+                  <span>Playwright Browser:</span>
+                  <input type="checkbox" id="wfCompaniesPlaywright" checked>
+                </label>
+              </div>
+              <button class="btn btn-secondary btn-block" onclick="launchWorkflow('jobs-companies', { limit: document.getElementById('wfCompaniesLimit').value, usePlaywright: document.getElementById('wfCompaniesPlaywright').checked })">
+                Run Companies Scan
+              </button>
+            </div>
+
+            <!-- Workflow 3: Cold Outreach Dry-Run -->
+            <div class="workflow-card">
+              <div class="wf-badge badge-amber">Referral Outreach</div>
+              <h3 class="wf-title">Outreach Preview (Dry-Run)</h3>
+              <p class="wf-desc">Read list.xlsx, build personalized cold email & referral requests with resume attachments, and test generation without sending.</p>
+              <div class="wf-params">
+                <div class="info-row">
+                  <span>Target Sheet:</span>
+                  <code>Bytedance (list.xlsx)</code>
+                </div>
+                <div class="info-row">
+                  <span>Mode:</span>
+                  <span class="text-amber">Dry Run (Safe)</span>
+                </div>
+              </div>
+              <button class="btn btn-amber btn-block" onclick="launchWorkflow('outreach-dry-run')">
+                Run Outreach Dry-Run
+              </button>
+            </div>
+
+            <!-- Workflow 4: Interview Prep Dossiers -->
+            <div class="workflow-card">
+              <div class="wf-badge badge-purple">Deep Research</div>
+              <h3 class="wf-title">Daily Interview Prep Engine</h3>
+              <p class="wf-desc">Scan /interviews/upcoming.md, create company/role workspaces, and generate 11-part comprehensive interview notebooks.</p>
+              <div class="wf-params">
+                <div class="info-row">
+                  <span>Trigger Window:</span>
+                  <code>7 Days Countdown</code>
+                </div>
+                <div class="info-row">
+                  <span>Artifacts:</span>
+                  <code>11 Modules / Role</code>
+                </div>
+              </div>
+              <button class="btn btn-purple btn-block" onclick="launchWorkflow('interview-prep')">
+                Generate Interview Prep
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Terminal Output -->
+          <div class="terminal-card">
+            <div class="terminal-header">
+              <div class="terminal-title">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+                <span class="terminal-label">Live Mission Control Terminal (stdout / stderr)</span>
+              </div>
+              <div class="terminal-controls">
+                <button class="btn btn-xs btn-outline" id="btnClearTerminal">Clear</button>
+                <button class="btn btn-xs btn-rose" id="btnCancelWorkflow">Stop Process</button>
+              </div>
+            </div>
+            <div class="terminal-body" id="terminalOutput">
+              <div class="terminal-line text-muted">Ready to stream execution logs. Click any workflow button above to start...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 4: Cold Outreach & Referrals -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-outreach">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">📬 Cold Outreach & Referral Engine</h2>
+              <p class="section-subtitle">Automated, personalized email outreach from Excel contacts with rate-limiting, deduping, and resume attachments.</p>
+            </div>
+            <div class="queue-actions">
+              <button class="btn btn-secondary btn-sm" onclick="launchWorkflow('outreach-dry-run')">Preview All (Dry-Run)</button>
+              <button class="btn btn-primary btn-sm" onclick="confirmLiveOutreach()">Send Live Campaign</button>
+            </div>
+          </div>
+
+          <div class="outreach-grid">
+            <!-- Left: Recipient List from Excel -->
+            <div class="card outreach-list-card">
+              <div class="card-header">
+                <h3>Recipients from <code>list.xlsx</code></h3>
+                <span class="badge badge-info" id="outreachSheetNameBadge">Sheet: Bytedance</span>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="outreachRecipientsTable">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Company</th>
+                      <th>Email</th>
+                      <th>Target Role</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="outreachRecipientsBody">
+                    <tr><td colspan="5" class="text-center py-4 text-muted">Loading recipients...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right: Email Template & Live Preview -->
+            <div class="card outreach-preview-card">
+              <div class="card-header">
+                <h3>Template & Live Email Preview</h3>
+                <span class="badge badge-emerald">Personalized</span>
+              </div>
+              <div class="email-mockup">
+                <div class="email-mockup-header">
+                  <div><strong>From:</strong> <span id="previewSender">yashgiradkar02@gmail.com</span></div>
+                  <div><strong>To:</strong> <span id="previewRecipient">Sarah Chen &lt;sarah.chen@bytedance.com&gt;</span></div>
+                  <div><strong>Subject:</strong> <span id="previewSubject">Request for an Interview Opportunity - Backend Engineer at ByteDance</span></div>
+                  <div><strong>Attachment:</strong> <span class="badge badge-sm badge-secondary">📎 Yash_Giradkar_Resume.pdf</span></div>
+                </div>
+                <div class="email-mockup-body" id="previewEmailBody">
+                  Greetings Sarah,<br><br>
+                  I'm Yash Giradkar, a Generative AI & Backend Systems Engineer with 2–4 years of experience. I noticed ByteDance is looking for a Backend Engineer, and I would love to explore an interview opportunity.<br><br>
+                  <strong>Summary of my background:</strong><br>
+                  • Architected high-throughput NestJS/Node.js microservices and REST APIs handling production workloads.<br>
+                  • Designed RAG systems, LLM agents, and vector retrieval pipelines with LangChain and vector databases.<br>
+                  • Led MongoDB aggregation optimizations, data migration remediations, and distributed caching with Redis.<br>
+                  • Deployed containerized microservices to AWS via Docker and CI/CD automation.<br><br>
+                  I have attached my resume for your review. Would you be open to a brief conversation or referring me for this role?<br><br>
+                  Best regards,<br>
+                  <strong>Yash Giradkar</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Outreach History -->
+          <div class="card mt-6">
+            <div class="card-header">
+              <h3>Campaign Send History</h3>
+              <span class="badge badge-secondary" id="historyCountBadge">0 Sent</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="historyTable">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Recipient</th>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <tr><td colspan="5" class="text-center py-4 text-muted">No emails sent yet in this session.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 5: Interview Prep Workspace -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-interviews">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">💼 Interview Preparation Intelligence</h2>
+              <p class="section-subtitle">Dossiers, company research, system design questions, and technical STAR stories for upcoming interviews.</p>
+            </div>
+            <div>
+              <button class="btn btn-purple btn-sm" onclick="launchWorkflow('interview-prep')">
+                Regenerate Notebooks
+              </button>
+            </div>
+          </div>
+
+          <div class="interviews-list-grid" id="interviewsCardsContainer">
+            <!-- Dynamically populated interview workspaces -->
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 6: Executive Report -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-report">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">📊 Executive Job Intelligence Report</h2>
+              <p class="section-subtitle">Generated Markdown summary of discovered jobs, skill mappings, freshness breakdown, and candidate alignment.</p>
+            </div>
+            <div>
+              <button class="btn btn-secondary btn-sm" id="btnReloadReport">Refresh Report</button>
+            </div>
+          </div>
+
+          <div class="report-container card">
+            <div class="markdown-body" id="reportContentArea">
+              <p class="text-muted">Loading report...</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 7: Profile & Config -->
+        <!-- ======================================================== -->
+        <section class="tab-pane" id="tab-settings">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">⚙️ Candidate Profile & System Configuration</h2>
+              <p class="section-subtitle">Active positioning criteria, skill taxonomy weights, and environment connectivity.</p>
+            </div>
+          </div>
+
+          <div class="config-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3>Candidate Positioning</h3>
+              </div>
+              <div class="profile-details">
+                <div class="detail-row">
+                  <strong>Candidate:</strong> <span>Yash Giradkar</span>
+                </div>
+                <div class="detail-row">
+                  <strong>Target Experience:</strong> <span class="badge badge-emerald">2–4 Years</span>
+                </div>
+                <div class="detail-row">
+                  <strong>Target Roles:</strong> <span>Generative AI / LLM Engineer + Backend Engineer</span>
+                </div>
+                <div class="detail-row">
+                  <strong>Primary Tech:</strong> <span>Node.js, TypeScript, NestJS, Python, FastAPI, LangChain, RAG, MongoDB, AWS, Docker</span>
+                </div>
+                <div class="detail-row">
+                  <strong>Resume File:</strong> <code>./Yash_Giradkar_Resume.pdf</code>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Scoring Formula (Step 5)</h3>
+              </div>
+              <div class="weights-list">
+                <div class="weight-item">
+                  <div class="weight-label">Role Relevance: 25%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 25%; background: var(--color-indigo)"></div></div>
+                </div>
+                <div class="weight-item">
+                  <div class="weight-label">Skill Match: 30%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 30%; background: var(--color-emerald)"></div></div>
+                </div>
+                <div class="weight-item">
+                  <div class="weight-label">AI / LLM Relevance: 20%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 20%; background: var(--color-purple)"></div></div>
+                </div>
+                <div class="weight-item">
+                  <div class="weight-label">Backend Relevance: 10%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 10%; background: var(--color-blue)"></div></div>
+                </div>
+                <div class="weight-item">
+                  <div class="weight-label">Experience Compatibility: 10%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 10%; background: var(--color-amber)"></div></div>
+                </div>
+                <div class="weight-item">
+                  <div class="weight-label">Location Compatibility: 5%</div>
+                  <div class="weight-bar"><div class="bar-fill" style="width: 5%; background: var(--color-rose)"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- Job Detail Slide-Over Drawer -->
+    <div class="drawer-overlay" id="drawerOverlay"></div>
+    <div class="job-drawer" id="jobDrawer">
+      <div class="drawer-header">
+        <div>
+          <span class="badge" id="drawerMatchBadge">100% Match</span>
+          <h2 class="drawer-title" id="drawerTitle">Role Title</h2>
+          <span class="drawer-company" id="drawerCompany">Company Name</span>
+        </div>
+        <button class="btn-icon" id="btnCloseDrawer">&times;</button>
+      </div>
+
+      <div class="drawer-body" id="drawerBody">
+        <!-- Dynamically rendered -->
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn btn-secondary" id="btnDrawerReject">Reject Role</button>
+        <button class="btn btn-emerald" id="btnDrawerApprove">Approve for Application</button>
+        <a href="#" target="_blank" class="btn btn-primary" id="btnDrawerApplyLink">Open Career Portal &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Interview Dossier Modal -->
+    <div class="modal-overlay" id="dossierModalOverlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="modalDossierTitle">Interview Dossier</h3>
+            <span class="modal-subtitle" id="modalDossierSubtitle">Company Briefing & Preparation Notebook</span>
+          </div>
+          <button class="btn-icon" id="btnCloseModal">&times;</button>
+        </div>
+        <div class="modal-body markdown-body" id="modalDossierContent">
+          Loading dossier...
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
