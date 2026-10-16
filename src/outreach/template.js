@@ -13,8 +13,7 @@ function esc(v) {
 export function buildOutreachEmail(row, options = {}) {
   const { name: fullName, company, role, link } = row;
   const firstName = fullName ? fullName.trim().split(/\s+/)[0] : '';
-  const greeting = firstName ? `Greetings ${esc(firstName)},` : 'Greetings,';
-  const roleDisplay = role ? esc(role) : 'Software Engineer';
+  const roleDisplay = role ? esc(role) : 'Generative AI & Backend Engineer';
   const companyDisplay = company ? esc(company) : 'your team';
 
   // Candidate information from candidateProfile or options
@@ -25,63 +24,60 @@ export function buildOutreachEmail(row, options = {}) {
   const contactPhone = options.phone || profile.phone;
   const candidateName = options.candidateName || profile.name;
 
-  const subject = `Request for an Interview Opportunity - ${roleDisplay} at ${companyDisplay}`;
+  const subject = roleDisplay && companyDisplay !== 'your team' 
+    ? `${candidateName} — Generative AI & Backend Systems (${roleDisplay} at ${companyDisplay})`
+    : `${candidateName} — Generative AI & Backend Systems Engineer`;
 
   const html = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #2d3748; max-width: 600px;">
-  <p>${greeting}</p>
-  
-  <p>I hope this email finds you well. I'm <b>${esc(candidateName)}</b>, a <b>Generative AI & Backend Systems Engineer</b>. I noticed that <b>${companyDisplay}</b> is looking for a <b>${roleDisplay}</b>${link ? ` (<a href="${esc(link)}" style="color: #2563eb; text-decoration: underline;">opening link</a>)` : ''}, and I would love to explore an opportunity to contribute to your engineering team.</p>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; line-height: 1.6; color: #1e293b; max-width: 580px; margin: 0 auto; padding: 4px;">
+  <p style="margin-bottom: 12px; font-size: 15px;">Hi ${firstName || 'there'},</p>
 
-  <p>A quick overview of my background:</p>
-  <ul style="padding-left: 20px; margin: 10px 0;">
-    <li style="margin-bottom: 6px;"><b>Generative AI & LLM Systems:</b> Built multi-tenant RAG applications with dynamic tool calling, multimodal document parsing (PDF, HTML, images), and evaluated retrieval accuracy reaching <b>94.6% Precision@5</b>.</li>
-    <li style="margin-bottom: 6px;"><b>High-Performance Backend:</b> Deep experience in <b>Node.js, TypeScript, NestJS, Express, and Python</b>; optimized production APIs and database queries, reducing latency by <b>83%</b> at SmartData Enterprises.</li>
-    <li style="margin-bottom: 6px;"><b>Distributed Systems & Microservices:</b> Designed and maintained production-grade <b>TypeScript API Gateways</b> with Consul service discovery, circuit breaking, and centralized observability (ELK Stack & Correlation IDs).</li>
-    <li style="margin-bottom: 6px;"><b>Database Integrity & Scalability:</b> Hands-on expertise in <b>MongoDB aggregations</b> (resolved 70K+ record data integrity incident with zero data loss), PostgreSQL, and Redis caching.</li>
-    <li style="margin-bottom: 6px;"><b>Cloud & CI/CD:</b> Production containerization with <b>Docker, AWS (ECS, Fargate, S3, Secrets Manager)</b>, and automated GitHub Actions deployment pipelines.</li>
-  </ul>
+  <p style="margin-bottom: 12px;">I've been closely following <b>${companyDisplay}</b>'s rapid innovation${roleDisplay ? ` and saw you're looking for a <b>${roleDisplay}</b>` : ''}${link ? ` (<a href="${esc(link)}" style="color: #4f46e5; text-decoration: underline;">job posting</a>)` : ''}.</p>
 
-  <p>I am actively available for interviews and can join at the earliest. A referral or discussion regarding this role would mean a lot to my career.</p>
+  <p style="margin-bottom: 14px;">Most candidates build simple prompt wrappers. My focus over the last <b>2–4 years</b> has been the actual hard engineering: <b>production multi-agent systems, sub-second vector retrieval, and high-throughput backend infrastructure</b> that make AI dependable at scale.</p>
 
-  <p>Please feel free to review my profiles:</p>
-  <p style="margin: 8px 0;">
-    📄 <a href="${esc(resumeUrl)}" style="color: #2563eb; font-weight: 600; text-decoration: underline;">Resume / Portfolio</a> &nbsp;|&nbsp; 
-    💼 <a href="${esc(linkedinUrl)}" style="color: #2563eb; font-weight: 600; text-decoration: underline;">LinkedIn</a> &nbsp;|&nbsp; 
-    💻 <a href="${esc(githubUrl)}" style="color: #2563eb; font-weight: 600; text-decoration: underline;">GitHub</a>
-  </p>
+  <div style="background: #f8fafc; border-left: 3px solid #6366f1; border-radius: 4px; padding: 12px 16px; margin: 14px 0;">
+    <p style="margin: 0 0 8px 0; font-weight: 600; color: #0f172a; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Key Impact I Bring to ${companyDisplay}:</p>
+    <ul style="margin: 0; padding-left: 18px; color: #334155; font-size: 14px;">
+      <li style="margin-bottom: 6px;"><b>Agentic AI & RAG:</b> Multi-agent orchestration (LangChain, LangGraph), deterministic tool-calling, and hybrid vector retrieval achieving <b>94.6% Precision@5</b>.</li>
+      <li style="margin-bottom: 6px;"><b>High-Concurrency Backend:</b> Node.js, TypeScript, NestJS API Gateways & Python/FastAPI microservices (reduced production API latency by <b>83%</b>).</li>
+      <li style="margin-bottom: 0;"><b>Production Infrastructure:</b> Scalable MongoDB aggregations, PostgreSQL, Redis caching, Docker containerization, and automated AWS (ECS/Fargate) CI/CD.</li>
+    </ul>
+  </div>
 
-  <p style="margin-top: 20px;">
-    Thank you for your time and consideration.<br><br>
-    Warm regards,<br>
-    <b>${esc(candidateName)}</b><br>
-    ${contactPhone ? `<span>📞 ${esc(contactPhone)}</span><br>` : ''}
-    <span>✉️ ${esc(profile.email)}</span>
+  <p style="margin-bottom: 14px;">I've attached my resume for your convenience. Would you or the engineering hiring team be open to a brief <b>10-minute sync this week</b> to discuss how I can contribute immediately?</p>
+
+  <p style="margin-top: 18px; color: #475569; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 13.5px;">
+    Best regards,<br>
+    <strong style="color: #0f172a; font-size: 15px;">${esc(candidateName)}</strong><br>
+    <span style="font-size: 13px; color: #64748b;">Generative AI / LLM & Backend Systems Engineer</span><br>
+    <span style="font-size: 12.5px; margin-top: 4px; display: inline-block;">
+      <a href="${esc(resumeUrl)}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">🌐 Portfolio</a> &bull; 
+      <a href="${esc(linkedinUrl)}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">💼 LinkedIn</a> &bull; 
+      <a href="${esc(githubUrl)}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">🐙 GitHub</a>
+      ${contactPhone ? ` &bull; <span style="color: #334155;">📞 ${esc(contactPhone)}</span>` : ''}
+    </span>
   </p>
 </div>
 `;
 
-  const text = `${firstName ? `Greetings ${firstName},` : 'Greetings,'}
+  const text = `Hi ${firstName || 'there'},
 
-I'm ${candidateName}, a Generative AI & Backend Systems Engineer. I noticed that ${company} is looking for a ${role}, and I would love to explore an interview opportunity.
+I've been closely following ${companyDisplay}'s rapid innovation${roleDisplay ? ` and saw you're looking for a ${roleDisplay}` : ''}.
 
-Summary of my background:
-- Generative AI & LLM: Built multi-tenant RAG systems with dynamic tool calling and 94.6% Precision@5 retrieval.
-- Backend & Performance: Node.js, TypeScript, NestJS, Express; reduced API latency by 83%.
-- Microservices & Architecture: Production TypeScript API Gateways with Consul service discovery and ELK observability.
-- Databases: MongoDB aggregations (repaired 70K+ production records), PostgreSQL, Redis.
-- Cloud & DevOps: AWS (ECS, Fargate, S3, Secrets Manager), Docker, GitHub Actions CI/CD.
+Most candidates build simple prompt wrappers. My focus over the last 2–4 years has been the actual hard engineering: production multi-agent systems, sub-second vector retrieval, and high-throughput backend infrastructure that make AI dependable at scale.
 
-Portfolio / Resume: ${resumeUrl}
-LinkedIn: ${linkedinUrl}
-GitHub: ${githubUrl}
+Key Impact I Bring to ${companyDisplay}:
+• Agentic AI & RAG: Multi-agent orchestration (LangChain, LangGraph), deterministic tool-calling, and hybrid vector retrieval achieving 94.6% Precision@5.
+• High-Concurrency Backend: Node.js, TypeScript, NestJS API Gateways & Python/FastAPI microservices (reduced production API latency by 83%).
+• Production Infrastructure: Scalable MongoDB aggregations, PostgreSQL, Redis caching, Docker containerization, and automated AWS (ECS/Fargate) CI/CD.
 
-Thank you for your time and consideration.
+I've attached my resume for your convenience. Would you or the engineering hiring team be open to a brief 10-minute sync this week to discuss how I can contribute immediately?
 
-Warm regards,
+Best regards,
 ${candidateName}
-${contactPhone ? `Phone: ${contactPhone}` : ''}
-Email: ${profile.email}
+Generative AI & Backend Systems Engineer
+Portfolio: ${resumeUrl} | LinkedIn: ${linkedinUrl} | GitHub: ${githubUrl} | Phone: ${contactPhone}
 `;
 
   return { subject, html, text };

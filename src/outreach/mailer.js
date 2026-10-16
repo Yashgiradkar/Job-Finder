@@ -41,28 +41,36 @@ export async function verifyConnection(transporter) {
  * Sends a single cold outreach email.
  */
 export async function sendOutreachEmail(transporter, emailData) {
-  const { to, subject, html, text, fromName, resumePath } = emailData;
+  const { to, subject, html, text, fromName, fromEmail, attachmentPath, resumePath } = emailData;
 
-  const senderName = fromName || 'Yash Giradkar';
-  const fromAddress = `"${senderName}" <${config.email.user}>`;
+  const senderName = (fromName || 'Yash Giradkar').trim();
+  const senderEmail = (fromEmail || config.email.user).trim();
+  const fromAddress = `"${senderName}" <${senderEmail}>`;
 
   const mailOptions = {
     from: fromAddress,
-    to,
-    subject,
+    replyTo: fromAddress,
+    to: to.trim(),
+    subject: subject.trim(),
     html,
     text
   };
 
-  // Optional PDF resume attachment
-  if (resumePath && fs.existsSync(path.resolve(process.cwd(), resumePath))) {
-    const absPath = path.resolve(process.cwd(), resumePath);
-    mailOptions.attachments = [
-      {
-        filename: path.basename(absPath),
-        path: absPath
-      }
-    ];
+  // Optional attachment (Resume PDF or custom document)
+  const attachCandidate = attachmentPath || resumePath;
+  if (attachCandidate) {
+    const absPath = path.isAbsolute(attachCandidate)
+      ? attachCandidate
+      : path.resolve(process.cwd(), attachCandidate);
+
+    if (fs.existsSync(absPath)) {
+      mailOptions.attachments = [
+        {
+          filename: path.basename(absPath),
+          path: absPath
+        }
+      ];
+    }
   }
 
   try {

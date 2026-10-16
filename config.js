@@ -4,6 +4,10 @@ export const config = {
   autoApply: String(process.env.AUTO_APPLY).toLowerCase() === 'true',
   headless: String(process.env.HEADLESS ?? 'true').toLowerCase() !== 'false',
   resumePath: process.env.RESUME_PATH,
+  mongodb: {
+    uri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
+    dbName: process.env.MONGODB_DB_NAME || 'ai_job_hunter'
+  },
   email: {
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 465),

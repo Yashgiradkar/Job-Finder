@@ -6,6 +6,21 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import xlsx from 'xlsx';
 import 'dotenv/config';
+import { fetchAgenticStartups } from './jobs/googleSheetFetcher.js';
+import { createTransporter, sendOutreachEmail, delayWithJitter } from './outreach/mailer.js';
+import { buildOutreachEmail } from './outreach/template.js';
+import { recordSent } from './outreach/tracker.js';
+import { 
+  connectDB, 
+  saveOutreachLog, 
+  getOutreachLogs, 
+  getDBStats, 
+  saveCompanyContact, 
+  getCompanyContacts, 
+  getAllCompanyContacts 
+} from './db/mongo.js';
+import { enrichCompanyContacts } from './outreach/contactEnricher.js';
+import { config } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -238,19 +253,68 @@ app.get('/api/interviews/artifact', async (req, res) => {
 });
 
 // --------------------------------------------------------------------------
-// API: Outreach Contacts & History
+// Outreach Queue Store Helpers (data/outreach-queue.json)
+// --------------------------------------------------------------------------
+const OUTREACH_QUEUE_FILE = path.join(rootDir, 'data/outreach-queue.json');
+
+async function getOutreachQueue() {
+  if (existsSync(OUTREACH_QUEUE_FILE)) {
+    try {
+      const text = await fs.readFile(OUTREACH_QUEUE_FILE, 'utf-8');
+      return JSON.parse(text);
+    } catch {
+      return [];
+    }
+  }
+
+  // Initialize from list.xlsx if queue file doesn't exist yet
+  const excelPath = path.join(rootDir, 'list.xlsx');
+  let initial = [];
+  if (existsSync(excelPath)) {
+    try {
+      const wb = xlsx.readFile(excelPath);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = xlsx.utils.sheet_to_json(ws);
+      initial = rows.map((r, i) => ({
+        id: `rec-excel-${i + 1}`,
+        name: r.Name || '',
+        company: r.Company || 'Company',
+        email: r.Email || '',
+        role: r.Role || 'Backend Engineer',
+        link: r.Link || '',
+        status: 'pending_preview', // 'pending_preview' | 'previewed' | 'ready' | 'sent'
+        customSubject: null,
+        customBody: null,
+        lastPreviewedAt: null,
+        sentAt: null
+      }));
+    } catch {}
+  }
+
+  await saveOutreachQueue(initial);
+  return initial;
+}
+
+async function saveOutreachQueue(queue) {
+  await fs.mkdir(path.dirname(OUTREACH_QUEUE_FILE), { recursive: true });
+  await fs.writeFile(OUTREACH_QUEUE_FILE, JSON.stringify(queue, null, 2), 'utf-8');
+}
+
+// --------------------------------------------------------------------------
+// API: Outreach Queue, History & Status
 // --------------------------------------------------------------------------
 app.get('/api/outreach', async (req, res) => {
   try {
-    const excelPath = path.join(rootDir, 'list.xlsx');
-    let recipients = [];
-    let sheetNames = [];
+    const queue = await getOutreachQueue();
 
+    // Sheet names
+    let sheetNames = [];
+    const excelPath = path.join(rootDir, 'list.xlsx');
     if (existsSync(excelPath)) {
-      const wb = xlsx.readFile(excelPath);
-      sheetNames = wb.SheetNames;
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      recipients = xlsx.utils.sheet_to_json(ws);
+      try {
+        const wb = xlsx.readFile(excelPath);
+        sheetNames = wb.SheetNames;
+      } catch {}
     }
 
     // Outreach history
@@ -263,8 +327,9 @@ app.get('/api/outreach', async (req, res) => {
     res.json({
       success: true,
       sheetNames,
-      recipients,
+      recipients: queue,
       history,
+      targetTestEmail: config.email.to || config.email.user,
       resumePath: process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
       resumeExists: existsSync(path.join(rootDir, process.env.RESUME_PATH || 'Yash_Giradkar_Resume.pdf'))
     });
@@ -272,6 +337,643 @@ app.get('/api/outreach', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// API: Add New Recipient to Outreach Queue
+app.post('/api/outreach/recipient', async (req, res) => {
+  try {
+    const { name, company, email, role, link } = req.body;
+    if (!company) {
+      return res.status(400).json({ success: false, error: 'Company name is required' });
+    }
+
+    const queue = await getOutreachQueue();
+    const newRecipient = {
+      id: `rec-custom-${Date.now()}`,
+      name: name || '',
+      company: company.trim(),
+      email: (email || '').trim(),
+      role: role ? role.trim() : 'Generative AI & Backend Engineer',
+      link: link ? link.trim() : '',
+      status: 'pending_preview',
+      customSubject: null,
+      customBody: null,
+      lastPreviewedAt: null,
+      sentAt: null
+    };
+
+    queue.unshift(newRecipient);
+    await saveOutreachQueue(queue);
+
+    res.json({ success: true, recipient: newRecipient, message: 'Recipient added to outreach queue' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Update Existing Recipient
+app.put('/api/outreach/recipient/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, company, email, role, link, customSubject, customBody, status } = req.body;
+
+    const queue = await getOutreachQueue();
+    const idx = queue.findIndex(r => r.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'Recipient not found' });
+    }
+
+    if (name !== undefined) queue[idx].name = name;
+    if (company !== undefined) queue[idx].company = company;
+    if (email !== undefined) queue[idx].email = email;
+    if (role !== undefined) queue[idx].role = role;
+    if (link !== undefined) queue[idx].link = link;
+    if (customSubject !== undefined) queue[idx].customSubject = customSubject;
+    if (customBody !== undefined) queue[idx].customBody = customBody;
+    if (status !== undefined) queue[idx].status = status;
+
+    await saveOutreachQueue(queue);
+    res.json({ success: true, recipient: queue[idx], message: 'Recipient updated' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Delete Recipient
+app.delete('/api/outreach/recipient/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const queue = await getOutreachQueue();
+    const filtered = queue.filter(r => r.id !== id);
+    if (filtered.length === queue.length) {
+      return res.status(404).json({ success: false, error: 'Recipient not found' });
+    }
+
+    await saveOutreachQueue(filtered);
+    res.json({ success: true, message: 'Recipient removed' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Populate 30 Startup Companies into Queue (from Google Sheet)
+app.post('/api/outreach/populate-startups', async (req, res) => {
+  try {
+    const batchCount = parseInt(req.body.count || '30', 10);
+    const startupsResult = await fetchAgenticStartups();
+    const startups = startupsResult.companies.slice(0, batchCount);
+
+    const queue = await getOutreachQueue();
+    const existingCompanies = new Set(queue.map(q => q.company.toLowerCase()));
+
+    let addedCount = 0;
+    for (const s of startups) {
+      if (!existingCompanies.has(s.company.toLowerCase())) {
+        queue.push({
+          id: `rec-startup-${Date.now()}-${addedCount}`,
+          name: 'Founding Team / Recruiter',
+          company: s.company,
+          email: '', // to be reviewed or filled by user
+          role: 'Generative AI & Backend Systems Engineer',
+          link: s.careerUrl,
+          status: 'pending_preview',
+          customSubject: null,
+          customBody: null,
+          category: s.meta?.category || 'AI Startup',
+          description: s.meta?.description || '',
+          lastPreviewedAt: null,
+          sentAt: null
+        });
+        existingCompanies.add(s.company.toLowerCase());
+        addedCount++;
+      }
+    }
+
+    await saveOutreachQueue(queue);
+    res.json({
+      success: true,
+      message: `Added ${addedCount} startup companies to outreach campaign`,
+      totalQueue: queue.length
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Generate Live Email Preview for Recipient
+app.post('/api/outreach/preview', async (req, res) => {
+  try {
+    const { id, name, company, email, role, link, customSubject, customBody } = req.body;
+    let rec = {};
+
+    if (id) {
+      const queue = await getOutreachQueue();
+      const found = queue.find(q => q.id === id);
+      if (found) {
+        rec = { ...found };
+      }
+    }
+
+    if (name) rec.name = name;
+    if (company) rec.company = company;
+    if (email) rec.email = email;
+    if (role) rec.role = role;
+    if (link) rec.link = link;
+    if (customSubject !== undefined) rec.customSubject = customSubject;
+    if (customBody !== undefined) rec.customBody = customBody;
+
+    const defaultBuilt = buildOutreachEmail({
+      name: rec.name || 'Hiring Manager',
+      company: rec.company || 'Company',
+      role: rec.role || 'Generative AI & Backend Engineer',
+      link: rec.link || '',
+      email: rec.email || ''
+    });
+
+    const subject = rec.customSubject || defaultBuilt.subject;
+    const bodyHtml = rec.customBody || defaultBuilt.html;
+    const bodyText = defaultBuilt.text;
+
+    // Mark as previewed in queue if id provided
+    if (id) {
+      const queue = await getOutreachQueue();
+      const qItem = queue.find(q => q.id === id);
+      if (qItem) {
+        qItem.status = 'previewed';
+        qItem.lastPreviewedAt = new Date().toISOString();
+        if (customSubject) qItem.customSubject = customSubject;
+        if (customBody) qItem.customBody = customBody;
+        await saveOutreachQueue(queue);
+      }
+    }
+
+    res.json({
+      success: true,
+      subject,
+      html: bodyHtml,
+      text: bodyText,
+      recipient: rec
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Verify Attachment Path on Server
+app.post('/api/outreach/verify-attachment', async (req, res) => {
+  try {
+    const target = req.body.path || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf';
+    const absPath = path.isAbsolute(target) ? target : path.resolve(rootDir, target);
+    if (existsSync(absPath)) {
+      const stats = await fs.stat(absPath);
+      res.json({
+        success: true,
+        exists: true,
+        filename: path.basename(absPath),
+        sizeKb: (stats.size / 1024).toFixed(1),
+        path: target
+      });
+    } else {
+      res.json({
+        success: true,
+        exists: false,
+        error: `File not found at: ${target}`
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Send Test Email ONLY to User's Address (Strict Safety Guardrail)
+app.post('/api/outreach/send-test', async (req, res) => {
+  try {
+    const { id, subject, html, text, fromName, fromEmail, attachmentPath } = req.body;
+    const userEmail = config.email.to || config.email.user;
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'No user email configured in .env (EMAIL_TO / SMTP_USER)' });
+    }
+
+    const transporter = createTransporter();
+    const testSubject = `[TEST PREVIEW] ${subject || 'Outreach Email Preview'}`;
+
+    broadcastLog(`📨 Sending safe test preview to YOUR email (${userEmail})...`, 'system');
+
+    const result = await sendOutreachEmail(transporter, {
+      to: userEmail,
+      fromName: fromName || 'Yash Giradkar',
+      fromEmail: fromEmail || config.email.user,
+      subject: testSubject,
+      html: html || '<p>Test email body</p>',
+      text: text || 'Test email body',
+      attachmentPath: attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf'
+    });
+
+    if (!result.success) {
+      broadcastLog(`❌ Failed to send test email: ${result.error}`, 'error');
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    broadcastLog(`✅ Test preview sent to ${userEmail} (ID: ${result.messageId}). Zero emails were sent to external contacts.`, 'success');
+
+    // Mark recipient as previewed
+    if (id) {
+      const queue = await getOutreachQueue();
+      const qItem = queue.find(q => q.id === id);
+      if (qItem) {
+        qItem.status = 'previewed';
+        qItem.lastPreviewedAt = new Date().toISOString();
+        await saveOutreachQueue(queue);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Test email sent to your inbox (${userEmail}). No third party was contacted.`,
+      messageId: result.messageId
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Send Single Approved Email (Data passed 100% from UI - NO JSON dependency)
+app.post('/api/outreach/send-single', async (req, res) => {
+  try {
+    const {
+      to,
+      fromName,
+      fromEmail,
+      recipientName,
+      company,
+      role,
+      subject,
+      html,
+      text,
+      attachmentPath,
+      id,
+      confirmed
+    } = req.body;
+
+    if (!confirmed) {
+      return res.status(400).json({ success: false, error: 'Explicit user confirmation required.' });
+    }
+
+    // Strict Production Email Validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const recipientEmail = (to || '').trim();
+    if (!recipientEmail || !emailRegex.test(recipientEmail)) {
+      return res.status(400).json({ success: false, error: `Invalid recipient email address: "${to}". Must be a valid corporate email.` });
+    }
+
+    // Reject fake / test placeholder domains in production dispatch
+    const lowerTo = recipientEmail.toLowerCase();
+    if (lowerTo.endsWith('@example.com') || lowerTo.endsWith('@placeholder.com') || lowerTo.endsWith('@test.com')) {
+      return res.status(400).json({ success: false, error: `Refusing to send to fake/test domain (${recipientEmail}). Please enter a verified email in the UI.` });
+    }
+
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ success: false, error: 'Email subject cannot be empty.' });
+    }
+
+    if (subject.includes('{{') || (html && html.includes('{{'))) {
+      return res.status(400).json({ success: false, error: 'Unreplaced template tokens detected. Please resolve all {{tokens}} before sending.' });
+    }
+
+    if (!html || !html.trim()) {
+      return res.status(400).json({ success: false, error: 'Email body cannot be empty.' });
+    }
+
+    // Verify attachment if specified
+    if (attachmentPath) {
+      const absAttachment = path.isAbsolute(attachmentPath) ? attachmentPath : path.resolve(rootDir, attachmentPath);
+      if (!existsSync(absAttachment)) {
+        return res.status(400).json({ success: false, error: `Attachment file does not exist at path: ${attachmentPath}` });
+      }
+    }
+
+    broadcastLog(`📤 Dispatching approved outreach email to ${recipientName || 'Hiring Team'} <${recipientEmail}> (${company || 'Company'})...`, 'system');
+
+    const transporter = createTransporter();
+    const sendResult = await sendOutreachEmail(transporter, {
+      to: recipientEmail,
+      fromName: fromName || 'Yash Giradkar',
+      fromEmail: fromEmail || config.email.user,
+      subject: subject.trim(),
+      html,
+      text: text || html.replace(/<[^>]+>/g, ' '),
+      attachmentPath: attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf'
+    });
+
+    if (sendResult.success) {
+      // Audit log sent record to file tracker
+      await recordSent({
+        email: recipientEmail,
+        name: recipientName || '',
+        company: company || 'Company',
+        role: role || '',
+        subject: subject.trim(),
+        timestamp: new Date().toISOString()
+      });
+
+      // Save complete record directly to MongoDB on localhost:27017 (database: ai_job_hunter)
+      await saveOutreachLog({
+        company: company || 'Company',
+        recipientName: recipientName || '',
+        toEmail: recipientEmail,
+        fromName: fromName || 'Yash Giradkar',
+        fromEmail: fromEmail || config.email.user,
+        role: role || '',
+        subject: subject.trim(),
+        html: html,
+        text: text || html.replace(/<[^>]+>/g, ' '),
+        attachmentPath: attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
+        location: req.body.location || 'Remote / Hybrid',
+        status: 'sent',
+        messageId: sendResult.messageId,
+        source: 'ui_single_dispatch'
+      });
+
+      // Update in queue tracking if ID provided
+      if (id) {
+        const queue = await getOutreachQueue();
+        const rec = queue.find(q => q.id === id);
+        if (rec) {
+          rec.status = 'sent';
+          rec.sentAt = new Date().toISOString();
+          await saveOutreachQueue(queue);
+        }
+      }
+
+      broadcastLog(`✅ Outreach email successfully sent to ${recipientEmail} (ID: ${sendResult.messageId})`, 'success');
+      res.json({ success: true, message: `Email sent to ${recipientEmail}`, messageId: sendResult.messageId });
+    } else {
+      broadcastLog(`❌ Failed to send to ${recipientEmail}: ${sendResult.error}`, 'error');
+      res.status(500).json({ success: false, error: sendResult.error });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Send Approved Batch (Data passed 100% from UI - NO JSON dependency)
+app.post('/api/outreach/send-batch', async (req, res) => {
+  try {
+    const { batch, confirmed } = req.body;
+    if (!confirmed) {
+      return res.status(400).json({ success: false, error: 'Explicit batch confirmation required.' });
+    }
+
+    if (!Array.isArray(batch) || batch.length === 0) {
+      return res.status(400).json({ success: false, error: 'No recipients provided in batch payload.' });
+    }
+
+    // Enterprise Pre-Flight Validation for the entire batch
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const validationErrors = [];
+
+    batch.forEach((item, idx) => {
+      const num = idx + 1;
+      const to = (item.to || '').trim();
+      const comp = item.company || 'Unknown Company';
+
+      if (!to || !emailRegex.test(to)) {
+        validationErrors.push(`[#${num} ${comp}] Missing or invalid email address: "${to}"`);
+        return;
+      }
+
+      const lower = to.toLowerCase();
+      if (lower.endsWith('@example.com') || lower.endsWith('@placeholder.com') || lower.endsWith('@test.com')) {
+        validationErrors.push(`[#${num} ${comp}] Fake/placeholder domain detected: "${to}"`);
+        return;
+      }
+
+      if (!item.subject || !item.subject.trim()) {
+        validationErrors.push(`[#${num} ${comp}] Subject line is empty`);
+        return;
+      }
+
+      if (item.subject.includes('[TEST') || item.subject.includes('{{') || (item.html && item.html.includes('{{'))) {
+        validationErrors.push(`[#${num} ${comp}] Subject or body contains unreplaced tokens or test markers`);
+        return;
+      }
+
+      if (!item.html || !item.html.trim()) {
+        validationErrors.push(`[#${num} ${comp}] Email body is empty`);
+        return;
+      }
+
+      if (item.attachmentPath) {
+        const absAttachment = path.isAbsolute(item.attachmentPath) ? item.attachmentPath : path.resolve(rootDir, item.attachmentPath);
+        if (!existsSync(absAttachment)) {
+          validationErrors.push(`[#${num} ${comp}] Attachment missing on disk: ${item.attachmentPath}`);
+        }
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Production Batch Validation Failed (${validationErrors.length} issue(s) detected). Zero emails sent.\n${validationErrors.join('\n')}`
+      });
+    }
+
+    // Acknowledge launch immediately
+    res.json({
+      success: true,
+      message: `Production batch of ${batch.length} verified emails launched with rate-limiting. Monitor terminal for live progress.`
+    });
+
+    // Run batch send directly from UI payload
+    (async () => {
+      broadcastLog(`🚀 Starting verified production batch of ${batch.length} emails...`, 'system');
+      const transporter = createTransporter();
+      const queue = await getOutreachQueue();
+
+      for (let i = 0; i < batch.length; i++) {
+        const item = batch[i];
+        const progress = `[${i + 1}/${batch.length}]`;
+
+        broadcastLog(`${progress} Sending to ${item.recipientName || 'Hiring Team'} at ${item.company} (${item.to})...`, 'system');
+
+        const sendRes = await sendOutreachEmail(transporter, {
+          to: item.to,
+          fromName: item.fromName || 'Yash Giradkar',
+          fromEmail: item.fromEmail || config.email.user,
+          subject: item.subject,
+          html: item.html,
+          text: item.text || item.html.replace(/<[^>]+>/g, ' '),
+          attachmentPath: item.attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf'
+        });
+
+        if (sendRes.success) {
+          await recordSent({
+            email: item.to,
+            name: item.recipientName || '',
+            company: item.company || 'Company',
+            role: item.role || '',
+            subject: item.subject,
+            timestamp: new Date().toISOString()
+          });
+
+          // Save complete record directly to MongoDB on localhost:27017 (database: ai_job_hunter)
+          await saveOutreachLog({
+            company: item.company || 'Company',
+            recipientName: item.recipientName || '',
+            toEmail: item.to,
+            fromName: item.fromName || 'Yash Giradkar',
+            fromEmail: item.fromEmail || config.email.user,
+            role: item.role || '',
+            subject: item.subject,
+            html: item.html,
+            text: item.text || item.html.replace(/<[^>]+>/g, ' '),
+            attachmentPath: item.attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
+            location: item.location || 'Remote / Hybrid',
+            status: 'sent',
+            messageId: sendRes.messageId,
+            source: 'ui_batch_dispatch'
+          });
+
+          if (item.id) {
+            const qItem = queue.find(q => q.id === item.id);
+            if (qItem) {
+              qItem.status = 'sent';
+              qItem.sentAt = new Date().toISOString();
+              await saveOutreachQueue(queue);
+            }
+          }
+
+          broadcastLog(`${progress} ✅ Delivered to ${item.to} (ID: ${sendRes.messageId})`, 'success');
+        } else {
+          broadcastLog(`${progress} ❌ Error sending to ${item.to}: ${sendRes.error}`, 'error');
+        }
+
+        if (i < batch.length - 1) {
+          broadcastLog(`⏳ Rate-limiting: waiting 15s before next dispatch...`, 'info');
+          await delayWithJitter(15000, 5000);
+        }
+      }
+
+      broadcastLog(`🏁 Batch outreach complete. All ${batch.length} production emails processed.`, 'success');
+    })();
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --------------------------------------------------------------------------
+// API: MongoDB Connection & Statistics
+// --------------------------------------------------------------------------
+app.get('/api/db/stats', async (req, res) => {
+  try {
+    const stats = await getDBStats();
+    res.json({ success: true, db: stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Outreach Logs from MongoDB
+app.get('/api/outreach/mongo-logs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || '100', 10);
+    const logs = await getOutreachLogs(limit);
+    res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Company HR & Founder Contact Enrichment (Search LinkedIn / Google & Save in MongoDB)
+app.post('/api/outreach/enrich-contact', async (req, res) => {
+  try {
+    const { company, link, id } = req.body;
+    if (!company) {
+      return res.status(400).json({ success: false, error: 'Company name is required' });
+    }
+
+    broadcastLog(`🔍 Searching LinkedIn / Google for HR & Founding members of ${company}...`, 'system');
+    const contacts = await enrichCompanyContacts(company, link);
+
+    // If an id was provided, auto-update the queue recipient with top discovered contact
+    if (id && contacts.length > 0) {
+      const topContact = contacts[0];
+      const queue = await getOutreachQueue();
+      const rec = queue.find(q => q.id === id);
+      if (rec) {
+        rec.name = topContact.name || rec.name;
+        rec.email = topContact.email || rec.email;
+        rec.role = topContact.title || rec.role;
+        rec.linkedinUrl = topContact.linkedinUrl || rec.linkedinUrl;
+        rec.location = topContact.location || rec.location;
+        rec.status = 'previewed';
+        await saveOutreachQueue(queue);
+      }
+    }
+
+    broadcastLog(`✅ Found ${contacts.length} verified contact(s) for ${company} and saved to MongoDB.`, 'success');
+    res.json({ success: true, contacts, count: contacts.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Batch Auto-Enrichment for Outreach Queue
+app.post('/api/outreach/enrich-batch', async (req, res) => {
+  try {
+    const queue = await getOutreachQueue();
+    // Find recipients without email or with placeholder
+    const targets = queue.filter(r => !r.email || r.email.endsWith('@example.com'));
+    if (targets.length === 0) {
+      return res.json({ success: true, message: 'All recipients in queue already have corporate contacts.', enrichedCount: 0 });
+    }
+
+    res.json({ success: true, message: `Auto-enrichment started for ${targets.length} companies in background. Monitor terminal for live progress.` });
+
+    // Background runner
+    (async () => {
+      broadcastLog(`⚡ Launching auto-enrichment for ${targets.length} startup companies...`, 'system');
+      let count = 0;
+      for (const rec of targets) {
+        try {
+          broadcastLog(`🔍 [${count + 1}/${targets.length}] Finding HR & Founders for ${rec.company}...`, 'info');
+          const contacts = await enrichCompanyContacts(rec.company, rec.link);
+          if (contacts.length > 0) {
+            rec.name = contacts[0].name || rec.name;
+            rec.email = contacts[0].email || rec.email;
+            rec.role = contacts[0].title || rec.role;
+            rec.location = contacts[0].location || 'Remote';
+            rec.status = 'previewed';
+            broadcastLog(`✓ ${rec.company}: Found ${contacts[0].name} (${contacts[0].email})`, 'success');
+          }
+          count++;
+          await saveOutreachQueue(queue);
+          await new Promise(r => setTimeout(r, 2000));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      broadcastLog(`🏁 Contact enrichment complete. ${count} companies updated and stored in MongoDB.`, 'success');
+    })();
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Get All Company Contacts from MongoDB
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const company = req.query.company;
+    const contacts = company 
+      ? await getCompanyContacts(company) 
+      : await getAllCompanyContacts();
+    res.json({ success: true, count: contacts.length, contacts });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // --------------------------------------------------------------------------
 // API: Update Application Queue Status (Approve / Reject / Apply)
@@ -409,9 +1111,15 @@ app.post('/api/action/cancel-workflow', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n======================================================`);
   console.log(`🌐 AI Job Hunter — Mission Control UI`);
   console.log(`🚀 Dashboard running at: http://localhost:${PORT}`);
   console.log(`======================================================\n`);
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('[MongoDB Startup Error]:', err.message);
+  }
 });
+
