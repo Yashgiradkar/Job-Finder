@@ -1,0 +1,28 @@
+{
+  "name": "ai-job-hunter",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "discover": "node src/index.js --discover",
+    "apply": "node src/index.js --apply",
+    "interview-prep": "node src/interviews/index.js",
+    "interview-prep:force": "node src/interviews/index.js --force",
+    "outreach": "node src/outreach/index.js",
+    "outreach:dry-run": "node src/outreach/index.js --dry-run",
+    "jobs:scan": "node src/jobs/index.js",
+    "jobs:scan:batch": "node src/jobs/index.js --limit 20",
+    "jobs:scan:dry-run": "node src/jobs/index.js --limit 10 --no-email",
+    "jobs:startups": "node src/jobs/index.js --source google-sheet --no-email",
+    "jobs:startups:playwright": "node src/jobs/index.js --source google-sheet --playwright --no-email",
+    "jobs:startups:email": "node src/jobs/index.js --source google-sheet",
+    "jobs:all": "node src/jobs/index.js --source both"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "dotenv": "^16.4.7",
+    "nodemailer": "^7.0.3",
+    "playwright": "^1.55.0",
+    "xlsx": "^0.18.5"
+  }
+}

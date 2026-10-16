@@ -1,0 +1,54 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables — NEVER commit credentials
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+
+# Data files (contain scraped/personal data — keep local)
+data/jobs.json
+data/outreach-sent.json
+
+# Sensitive job intelligence output
+jobs/output/
+
+# Interview workspace (personal notes & artifacts)
+interviews/*/
+!interviews/upcoming.md
+
+# Resume (personal document)
+*.pdf
+
+# Excel outreach lists
+list.xlsx
+
+# Research state tracker
+interviews/.research-state.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+**/.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Playwright browser binaries cache
+/ms-playwright/
