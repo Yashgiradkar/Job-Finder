@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 
 /**
  * Creates deterministic Job ID (Step 9).
+ * Prefers: company + officialJobId
+ * If officialJobId unavailable: company + normalizedTitle + normalizedLocation
  */
 export function generateDeterministicJobId(company, officialJobId, title, location) {
   if (officialJobId) {
@@ -22,13 +24,14 @@ function slug(str) {
 }
 
 /**
- * Candidate skill keywords for match scoring in descriptions.
+ * Relevant engineering keywords to filter out non-technical roles.
  */
 const RELEVANT_KEYWORDS = [
-  'backend', 'node', 'typescript', 'javascript', 'python', 'fastapi', 'nestjs',
-  'engineer', 'developer', 'software', 'platform', 'api', 'microservice',
-  'llm', 'ai', 'rag', 'langchain', 'agent', 'ml', 'machine learning',
-  'full stack', 'fullstack', 'distributed', 'infrastructure', 'devops', 'cloud'
+  'backend', 'node', 'typescript', 'javascript', 'python', 'fastapi', 'nestjs', 'express',
+  'engineer', 'developer', 'software', 'platform', 'api', 'microservice', 'microservices',
+  'llm', 'ai', 'rag', 'langchain', 'langgraph', 'agent', 'ml', 'machine learning',
+  'full stack', 'fullstack', 'distributed', 'infrastructure', 'devops', 'cloud',
+  'data engineer', 'systems', 'solution'
 ];
 
 function isRelevantTitle(title = '') {
@@ -37,33 +40,57 @@ function isRelevantTitle(title = '') {
 }
 
 /**
- * Builds a normalized job object.
+ * Builds a normalized Job object conforming strictly to STEP 3 specification:
+ * {
+ *   jobId,
+ *   company,
+ *   title,
+ *   location,
+ *   remote,
+ *   employmentType,
+ *   postedAt,
+ *   updatedAt,
+ *   jobUrl,
+ *   salary,
+ *   experienceRequirement,
+ *   description,
+ *   responsibilities,
+ *   requiredSkills,
+ *   preferredSkills,
+ *   education,
+ *   department
+ * }
+ * Never invents missing information; defaults missing fields to null.
  */
-function buildJob(company, title, jobUrl, location, salaryRange, remotePolicy, extraFields = {}) {
-  const isRemote = remotePolicy === '🌐' || remotePolicy.toLowerCase().includes('remote');
+function buildJob(company, title, jobUrl, location, salaryRange, companyRemotePolicy, extraFields = {}) {
+  const locStr = location ? String(location).trim() : null;
+  const isRemote = (locStr && locStr.toLowerCase().includes('remote')) ||
+                   (extraFields.description && extraFields.description.toLowerCase().includes('remote')) ||
+                   (companyRemotePolicy === '🌐' && (!locStr || locStr.toLowerCase().includes('remote')));
+
   return {
-    jobId: generateDeterministicJobId(company, extraFields.officialJobId || null, title, location),
+    jobId: generateDeterministicJobId(company, extraFields.officialJobId || null, title, locStr),
     company,
-    title,
-    location: location || (isRemote ? 'Remote' : 'Bengaluru, India / Hybrid'),
-    remote: isRemote,
-    employmentType: extraFields.employmentType || 'Full-time',
-    postedAt: extraFields.postedAt || new Date().toISOString(),
+    title: title ? String(title).trim() : null,
+    location: locStr,
+    remote: Boolean(isRemote),
+    employmentType: extraFields.employmentType || null,
+    postedAt: extraFields.postedAt || null,
     updatedAt: extraFields.updatedAt || null,
-    jobUrl: jobUrl,
-    salary: salaryRange && salaryRange !== 'Not Disclosed' ? salaryRange : null,
+    jobUrl: jobUrl || null,
+    salary: (salaryRange && salaryRange !== 'Not Disclosed' && salaryRange !== '—') ? salaryRange : null,
     experienceRequirement: extraFields.experienceRequirement || null,
-    description: extraFields.description || `${title} role at ${company}.`,
-    responsibilities: extraFields.responsibilities || [],
-    requiredSkills: extraFields.requiredSkills || [],
-    preferredSkills: extraFields.preferredSkills || [],
+    description: extraFields.description || null,
+    responsibilities: extraFields.responsibilities && extraFields.responsibilities.length > 0 ? extraFields.responsibilities : null,
+    requiredSkills: extraFields.requiredSkills && extraFields.requiredSkills.length > 0 ? extraFields.requiredSkills : null,
+    preferredSkills: extraFields.preferredSkills && extraFields.preferredSkills.length > 0 ? extraFields.preferredSkills : null,
     education: extraFields.education || null,
-    department: extraFields.department || 'Engineering'
+    department: extraFields.department || null
   };
 }
 
 /**
- * Greenhouse API crawler (fast, no JS needed).
+ * Greenhouse ATS Crawler.
  */
 async function crawlGreenhouse(company, url, salaryRange, remotePolicy) {
   const token = url.replace(/.*?boards\.greenhouse\.io\/([^/?#]+).*/, '$1')
@@ -83,11 +110,17 @@ async function crawlGreenhouse(company, url, salaryRange, remotePolicy) {
     if (!isRelevantTitle(item.title)) continue;
     const $ = cheerio.load(item.content || '');
     const desc = $.text().replace(/\s+/g, ' ').trim();
+    
+    // Extract experience if mentioned in description
+    const expMatch = desc.match(/(?:(\d+)\s*(?:-|to|–)\s*(\d+))\s*(?:\+)?\s*(?:years?|yrs?)/i) ||
+                     desc.match(/(?:(?:minimum|at\s*least|min)?\s*(\d+)\s*\+\s*(?:years?|yrs?))/i);
+
     jobs.push(buildJob(company, item.title, item.absolute_url || url,
       item.location?.name || null, salaryRange, remotePolicy, {
         officialJobId: String(item.id),
         postedAt: item.updated_at || null,
-        description: desc || item.title,
+        description: desc || null,
+        experienceRequirement: expMatch ? expMatch[0] : null,
         department: item.departments?.[0]?.name || null
       }));
   }
@@ -95,7 +128,7 @@ async function crawlGreenhouse(company, url, salaryRange, remotePolicy) {
 }
 
 /**
- * Lever API crawler.
+ * Lever ATS Crawler.
  */
 async function crawlLever(company, url, salaryRange, remotePolicy) {
   const token = url.replace(/.*?jobs\.lever\.co\/([^/?#]+).*/, '$1')
@@ -113,14 +146,17 @@ async function crawlLever(company, url, salaryRange, remotePolicy) {
   for (const item of (Array.isArray(data) ? data : [])) {
     if (!isRelevantTitle(item.text)) continue;
     const rawDesc = item.descriptionPlain || item.description || '';
+    const expMatch = rawDesc.match(/(?:(\d+)\s*(?:-|to|–)\s*(\d+))\s*(?:\+)?\s*(?:years?|yrs?)/i) ||
+                     rawDesc.match(/(?:(?:minimum|at\s*least|min)?\s*(\d+)\s*\+\s*(?:years?|yrs?))/i);
+
     jobs.push(buildJob(company, item.text, item.hostedUrl || url,
       item.categories?.location || null, salaryRange, remotePolicy, {
         officialJobId: item.id,
         postedAt: item.createdAt ? new Date(item.createdAt).toISOString() : null,
-        employmentType: item.categories?.commitment || 'Full-time',
-        description: rawDesc,
-        responsibilities: (item.lists || []).map(l =>
-          `${l.text}: ${(l.content || []).join('; ')}`),
+        employmentType: item.categories?.commitment || null,
+        description: rawDesc || null,
+        experienceRequirement: expMatch ? expMatch[0] : null,
+        responsibilities: (item.lists || []).map(l => `${l.text}: ${(l.content || []).join('; ')}`),
         department: item.categories?.team || null
       }));
   }
@@ -128,10 +164,9 @@ async function crawlLever(company, url, salaryRange, remotePolicy) {
 }
 
 /**
- * Ashby API crawler.
+ * Ashby ATS Crawler.
  */
 async function crawlAshby(company, url, salaryRange, remotePolicy) {
-  // Ashby uses a public jobs API endpoint
   const orgSlug = url.replace(/.*?jobs\.ashbyhq\.com\/([^/?#]+).*/, '$1')
     || url.replace(/.*?ashby\.io\/([^/?#]+).*/, '$1')
     || url.split('/').filter(Boolean).pop();
@@ -147,11 +182,16 @@ async function crawlAshby(company, url, salaryRange, remotePolicy) {
   const jobs = [];
   for (const item of (data.jobs || [])) {
     if (!isRelevantTitle(item.title)) continue;
+    const desc = item.descriptionPlain || item.description || '';
+    const expMatch = desc.match(/(?:(\d+)\s*(?:-|to|–)\s*(\d+))\s*(?:\+)?\s*(?:years?|yrs?)/i) ||
+                     desc.match(/(?:(?:minimum|at\s*least|min)?\s*(\d+)\s*\+\s*(?:years?|yrs?))/i);
+
     jobs.push(buildJob(company, item.title, item.jobUrl || url,
       item.location || null, salaryRange, remotePolicy, {
         officialJobId: item.id,
         postedAt: item.publishedAt || null,
-        description: item.descriptionPlain || item.description || item.title,
+        description: desc || null,
+        experienceRequirement: expMatch ? expMatch[0] : null,
         department: item.department || null
       }));
   }
@@ -159,20 +199,60 @@ async function crawlAshby(company, url, salaryRange, remotePolicy) {
 }
 
 /**
- * Playwright fallback for JS-heavy career pages.
+ * Playwright Interactive Crawler for JS-rendered career pages.
+ * Navigates through: search filters, load-more controls, pagination, categories.
  */
 async function crawlWithPlaywright(company, url, salaryRange, remotePolicy) {
   let browser = null;
   try {
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 }
     });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
 
-    // Wait a bit more for dynamic job loaders
-    await page.waitForTimeout(2000);
+    // Handle initial cookie popups/modals if present
+    const cookieButtons = ['#onetrust-accept-btn-handler', 'button:has-text("Accept")', 'button:has-text("Agree")'];
+    for (const btnSelector of cookieButtons) {
+      try {
+        const btn = page.locator(btnSelector).first();
+        if (await btn.isVisible({ timeout: 1000 })) {
+          await btn.click({ timeout: 1000 });
+        }
+      } catch {
+        // Ignore cookie dismiss errors
+      }
+    }
+
+    // Attempt interactive search / filter if search input is available
+    try {
+      const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[placeholder*="job" i]').first();
+      if (await searchInput.isVisible({ timeout: 1500 })) {
+        await searchInput.fill('engineer');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(2000);
+      }
+    } catch {
+      // Continue if search input not available
+    }
+
+    // Scroll and click "Load More" / pagination controls (up to 3 times)
+    for (let scrollIdx = 0; scrollIdx < 3; scrollIdx++) {
+      await page.evaluate(() => window.scrollBy(0, 1000));
+      await page.waitForTimeout(1000);
+
+      const loadMoreBtn = page.locator('button:has-text("Load More"), button:has-text("Show More"), a:has-text("Load More")').first();
+      try {
+        if (await loadMoreBtn.isVisible({ timeout: 1000 })) {
+          await loadMoreBtn.click({ timeout: 1000 });
+          await page.waitForTimeout(1500);
+        }
+      } catch {
+        // Continue if no load more button
+      }
+    }
 
     const html = await page.content();
     await browser.close();
@@ -186,7 +266,7 @@ async function crawlWithPlaywright(company, url, salaryRange, remotePolicy) {
 }
 
 /**
- * Extracts relevant job links from raw HTML.
+ * Extracts relevant job links and listings from raw HTML.
  */
 function parseHtmlForJobs(company, baseUrl, html, salaryRange, remotePolicy) {
   const $ = cheerio.load(html);
@@ -196,11 +276,11 @@ function parseHtmlForJobs(company, baseUrl, html, salaryRange, remotePolicy) {
   const selectors = [
     'a[href*="/jobs/"]', 'a[href*="/careers/"]', 'a[href*="/positions/"]',
     'a[href*="/openings/"]', 'a[href*="job_id="]', 'a[href*="posting"]',
-    '.job-listing a', '.opening a', '[data-job] a', 'li.job > a'
+    '.job-listing a', '.opening a', '[data-job] a', 'li.job > a', '.career-item a'
   ];
 
   $(selectors.join(', ')).each((_, el) => {
-    if (jobs.length >= 25) return;
+    if (jobs.length >= 35) return;
     const title = $(el).text().trim().replace(/\s+/g, ' ');
     let href = $(el).attr('href') || '';
 
@@ -214,8 +294,14 @@ function parseHtmlForJobs(company, baseUrl, html, salaryRange, remotePolicy) {
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
 
-    jobs.push(buildJob(company, title, href || baseUrl,
-      null, salaryRange, remotePolicy));
+    // Extract surrounding location text if available
+    const parentText = $(el).parent().text().replace(/\s+/g, ' ');
+    let loc = null;
+    if (parentText.toLowerCase().includes('remote')) loc = 'Remote';
+    else if (parentText.toLowerCase().includes('bengaluru') || parentText.toLowerCase().includes('bangalore')) loc = 'Bengaluru';
+    else if (parentText.toLowerCase().includes('india')) loc = 'India';
+
+    jobs.push(buildJob(company, title, href || baseUrl, loc, salaryRange, remotePolicy));
   });
 
   return jobs;
@@ -243,34 +329,8 @@ async function crawlWithFetch(company, url, salaryRange, remotePolicy) {
 }
 
 /**
- * Creates a synthetic "AI/Backend Engineer" record for companies where
- * no specific openings could be extracted (hiring in this domain is likely).
- */
-function syntheticRecord(company, url, salaryRange, remotePolicy) {
-  return buildJob(
-    company,
-    'Backend & Generative AI Engineer',
-    url,
-    remotePolicy === '🌐' ? 'Remote' : 'Bengaluru, India / Hybrid',
-    salaryRange,
-    remotePolicy,
-    {
-      experienceRequirement: '2–4 years',
-      description: `Join ${company}'s engineering team to build agentic AI platforms and backend infrastructure using LLMs, RAG, LangChain/LangGraph, Node.js/TypeScript, Python/FastAPI, MongoDB, PostgreSQL, AWS, and Docker.`,
-      responsibilities: [
-        'Build and scale agentic AI pipelines (RAG, tool calling, multi-agent orchestration).',
-        'Develop and maintain high-throughput REST APIs and microservices.',
-        'Integrate LLM providers (OpenAI, Anthropic, Gemini) and vector databases.',
-        'Containerize and deploy services to AWS (ECS/Fargate) via CI/CD pipelines.'
-      ],
-      requiredSkills: ['Node.js', 'TypeScript', 'Python', 'REST APIs', 'Microservices', 'MongoDB', 'AWS', 'Docker'],
-      preferredSkills: ['RAG', 'LangChain', 'LangGraph', 'LLMs', 'FAISS', 'Pinecone', 'FastAPI', 'CI/CD']
-    }
-  );
-}
-
-/**
  * Main entry point: crawls a single company career portal using best available method.
+ * Never invents fake/synthetic records. If no openings found, returns empty jobs list.
  */
 export async function crawlCompanyPortal(companyRecord, options = {}) {
   const { company, careerUrl, salaryRange, remotePolicy } = companyRecord;
@@ -284,30 +344,27 @@ export async function crawlCompanyPortal(companyRecord, options = {}) {
   }
 
   try {
-    // 1. Greenhouse API (most reliable, content-rich)
+    // 1. Greenhouse API (direct ATS)
     if (url.includes('greenhouse.io') || url.includes('boards.greenhouse.io')) {
       const jobs = await crawlGreenhouse(company, url, salaryRange, remotePolicy);
       if (jobs !== null) {
-        const relevant = jobs.length > 0 ? jobs : [syntheticRecord(company, url, salaryRange, remotePolicy)];
-        return { company, careerUrl: url, success: true, jobs: relevant };
+        return { company, careerUrl: url, success: true, jobs };
       }
     }
 
-    // 2. Lever API
+    // 2. Lever API (direct ATS)
     if (url.includes('jobs.lever.co') || url.includes('lever.co')) {
       const jobs = await crawlLever(company, url, salaryRange, remotePolicy);
       if (jobs !== null) {
-        const relevant = jobs.length > 0 ? jobs : [syntheticRecord(company, url, salaryRange, remotePolicy)];
-        return { company, careerUrl: url, success: true, jobs: relevant };
+        return { company, careerUrl: url, success: true, jobs };
       }
     }
 
-    // 3. Ashby
+    // 3. Ashby API (direct ATS)
     if (url.includes('ashbyhq.com') || url.includes('jobs.ashby')) {
       const jobs = await crawlAshby(company, url, salaryRange, remotePolicy);
       if (jobs !== null) {
-        const relevant = jobs.length > 0 ? jobs : [syntheticRecord(company, url, salaryRange, remotePolicy)];
-        return { company, careerUrl: url, success: true, jobs: relevant };
+        return { company, careerUrl: url, success: true, jobs };
       }
     }
 
@@ -315,23 +372,27 @@ export async function crawlCompanyPortal(companyRecord, options = {}) {
     const fetchResult = await crawlWithFetch(company, url, salaryRange, remotePolicy);
     if (!fetchResult.success) {
       if (usePlaywright) {
-        // 5. Playwright fallback for JS-heavy pages (403/blocked/SPA)
+        // 5. Playwright fallback for JS-heavy or blocked pages
         const pwJobs = await crawlWithPlaywright(company, url, salaryRange, remotePolicy);
-        const relevant = pwJobs.length > 0 ? pwJobs : [syntheticRecord(company, url, salaryRange, remotePolicy)];
-        return { company, careerUrl: url, success: true, jobs: relevant };
+        return { company, careerUrl: url, success: true, jobs: pwJobs };
       }
       return {
         company,
         careerUrl: url,
         success: false,
-        failureReason: `HTTP ${fetchResult.status} — JS-rendered page`,
-        retryRecommendation: 'Run with --playwright flag to enable headless browser crawling.',
+        failureReason: `HTTP ${fetchResult.status} — JS-rendered or protected page`,
+        retryRecommendation: 'Run with --playwright flag to execute headless browser crawl.',
         jobs: []
       };
     }
 
-    const relevant = fetchResult.jobs.length > 0 ? fetchResult.jobs : [syntheticRecord(company, url, salaryRange, remotePolicy)];
-    return { company, careerUrl: url, success: true, jobs: relevant };
+    // If fetch succeeded but returned 0 jobs and Playwright is enabled, try Playwright
+    if (fetchResult.jobs.length === 0 && usePlaywright) {
+      const pwJobs = await crawlWithPlaywright(company, url, salaryRange, remotePolicy);
+      return { company, careerUrl: url, success: true, jobs: pwJobs };
+    }
+
+    return { company, careerUrl: url, success: true, jobs: fetchResult.jobs };
 
   } catch (err) {
     return {
@@ -339,7 +400,7 @@ export async function crawlCompanyPortal(companyRecord, options = {}) {
       careerUrl: url,
       success: false,
       failureReason: err.message,
-      retryRecommendation: 'Check network or use --playwright for JS-heavy pages.',
+      retryRecommendation: 'Check connectivity or run with --playwright for JS-heavy pages.',
       jobs: []
     };
   }

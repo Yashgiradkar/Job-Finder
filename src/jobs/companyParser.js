@@ -5,12 +5,28 @@ import path from 'node:path';
  * Extracts URL from Markdown link [text](url) or returns plain URL.
  */
 function extractUrl(text) {
-  if (!text) return '';
-  const match = text.match(/\[(?:[^\]]*)\]\((https?:\/\/[^\s\)]+)\)/i);
-  if (match) return match[1].trim();
-  const plainMatch = text.match(/https?:\/\/[^\s\)]+/i);
-  if (plainMatch) return plainMatch[0].trim();
-  return text.trim();
+  const all = extractAllUrls(text);
+  return all.length > 0 ? all[0] : '';
+}
+
+/**
+ * Extracts ALL URLs from Markdown links or raw URLs in text.
+ */
+function extractAllUrls(text) {
+  if (!text) return [];
+  const urls = [];
+  const mdRegex = /\[(?:[^\]]*)\]\((https?:\/\/[^\s\)]+)\)/gi;
+  let match;
+  while ((match = mdRegex.exec(text)) !== null) {
+    urls.push(match[1].trim());
+  }
+  if (urls.length === 0) {
+    const plainRegex = /https?:\/\/[^\s\),]+/gi;
+    while ((match = plainRegex.exec(text)) !== null) {
+      urls.push(match[0].trim());
+    }
+  }
+  return [...new Set(urls)];
 }
 
 /**
@@ -67,15 +83,18 @@ export async function parseCompaniesFile(customPath = null) {
         const company = cells[0].replace(/[*_`]/g, '').trim();
         const salaryRange = cells[1].trim();
         const remotePolicy = cells[2].trim();
-        const careerUrl = extractUrl(cells[3]);
+        const urls = extractAllUrls(cells[3]);
 
-        if (company && careerUrl) {
-          companies.push({
-            company,
-            salaryRange: salaryRange || 'Not Disclosed',
-            remotePolicy: remotePolicy || 'Not Specified',
-            careerUrl
-          });
+        if (company && urls.length > 0) {
+          for (const u of urls) {
+            companies.push({
+              company,
+              salaryRange: salaryRange && salaryRange !== '—' ? salaryRange : 'Not Disclosed',
+              remotePolicy: remotePolicy || 'Not Specified',
+              careerUrl: u,
+              careerUrls: urls
+            });
+          }
         }
       }
     }

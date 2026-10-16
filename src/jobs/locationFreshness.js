@@ -35,10 +35,18 @@ export function evaluateLocation(locationStr = '', remotePolicyCompany = '') {
   } else if (locLower.includes('chennai')) {
     category = 'Chennai';
     isIndia = true;
+  } else if (
+    locLower.includes('kolkata') || locLower.includes('ahmedabad') || locLower.includes('jaipur') ||
+    locLower.includes('kochi') || locLower.includes('chandigarh') || locLower.includes('indore') ||
+    locLower.includes('surat') || locLower.includes('nagpur') || locLower.includes('goa') ||
+    locLower.includes('trivandrum') || locLower.includes('thiruvananthapuram')
+  ) {
+    category = 'Other India';
+    isIndia = true;
   } else if (locLower.includes('india')) {
     category = isRemote ? 'Remote India' : 'India';
     isIndia = true;
-  } else if (isRemote && (locLower.includes('anywhere') || locLower.includes('global') || !locLower.includes('us') && !locLower.includes('uk'))) {
+  } else if (isRemote && (locLower.includes('anywhere') || locLower.includes('global') || (!locLower.includes('us') && !locLower.includes('uk')))) {
     category = 'Remote';
   }
 

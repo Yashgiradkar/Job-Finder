@@ -45,7 +45,8 @@ export function evaluateExperience(job) {
                        titleLower.includes('staff') || 
                        titleLower.includes('lead') || 
                        titleLower.includes('director') || 
-                       titleLower.includes('head of');
+                       titleLower.includes('head of') ||
+                       titleLower.includes('senior');
 
   const isJuniorIntern = titleLower.includes('intern') || 
                          titleLower.includes('trainee') || 
@@ -92,11 +93,11 @@ export function evaluateExperience(job) {
   if (isSeniorStaff) {
     return {
       isAccepted: false,
-      minYears: 6,
-      maxYears: 10,
-      experienceRequirement: 'Inferred Senior/Staff/Lead level (5+ years)',
+      minYears: 5,
+      maxYears: 8,
+      experienceRequirement: null,
       experienceConfidence: 'inferred',
-      rejectionReason: 'Staff/Principal/Director level role requiring substantially > 4 years'
+      rejectionReason: 'Senior/Staff/Lead/Principal role normally requires substantially > 4 years'
     };
   }
 
@@ -105,9 +106,9 @@ export function evaluateExperience(job) {
       isAccepted: false,
       minYears: 0,
       maxYears: 1,
-      experienceRequirement: 'Inferred Entry / Intern level',
+      experienceRequirement: null,
       experienceConfidence: 'inferred',
-      rejectionReason: 'Internship role'
+      rejectionReason: 'Internship / New grad role'
     };
   }
 
@@ -116,7 +117,7 @@ export function evaluateExperience(job) {
     isAccepted: true,
     minYears: 2,
     maxYears: 4,
-    experienceRequirement: rawExperienceStr || '2–4 years (inferred from role scope)',
+    experienceRequirement: rawExperienceStr || null,
     experienceConfidence: 'inferred',
     rejectionReason: null
   };
