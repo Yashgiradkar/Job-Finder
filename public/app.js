@@ -547,47 +547,108 @@ async function loadOutreachData() {
     }
   } catch (err) {
     console.error('Error loading outreach:', err);
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-rose">Error loading outreach queue: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-rose">Error loading outreach queue: ${err.message}</td></tr>`;
+  }
+}
+
+// Avatar color helper
+function getCompanyAvatarMeta(name) {
+  const clean = (name || 'Company').trim();
+  const letter = clean.charAt(0).toUpperCase() || 'C';
+  const colors = ['avatar-indigo', 'avatar-purple', 'avatar-cyan', 'avatar-emerald', 'avatar-rose', 'avatar-amber'];
+  const charCode = letter.charCodeAt(0);
+  const colorClass = colors[charCode % colors.length];
+  return { letter, colorClass };
+}
+
+state.activeOutreachFilter = 'all';
+
+function setOutreachFilter(filter) {
+  state.activeOutreachFilter = filter;
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.filter === filter);
+  });
+  filterOutreachRecipients();
+}
+
+function updateQueueCounters(all) {
+  const allCount = all.length;
+  const readyCount = all.filter(r => r.status === 'ready').length;
+  const previewedCount = all.filter(r => r.status === 'previewed').length;
+  const pendingCount = all.filter(r => !r.status || r.status === 'pending').length;
+
+  const setElText = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+
+  setElText('outreachQueueCount', allCount);
+  setElText('filterCountAll', allCount);
+  setElText('filterCountReady', readyCount);
+  setElText('filterCountPreviewed', previewedCount);
+  setElText('filterCountPending', pendingCount);
+  setElText('approvedCountDisplay', readyCount);
+  setElText('approvedCountDisplayBtn', readyCount);
+
+  // Enable/disable Send Approved Batch button glow based on ready count
+  const btnBatch = document.getElementById('btnSendBatchApproved');
+  if (btnBatch) {
+    if (readyCount > 0) {
+      btnBatch.classList.add('btn-glow');
+      btnBatch.style.opacity = '1';
+    } else {
+      btnBatch.classList.remove('btn-glow');
+    }
   }
 }
 
 function renderOutreachTable(recipients) {
   const tbody = document.getElementById('outreachRecipientsBody');
+  const all = state.outreach.recipients || [];
+  updateQueueCounters(all);
 
   if (recipients.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-muted">Outreach queue is empty. Click "Load 30 Startups Batch" or "Add Recipient" above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-muted">No recipients found in this view.</td></tr>';
     return;
   }
 
   tbody.innerHTML = recipients.map((r) => {
     const isSelected = state.selectedRecipient && state.selectedRecipient.id === r.id;
     const isChecked = state.selectedRecipientIds.has(r.id);
+    const { letter, colorClass } = getCompanyAvatarMeta(r.company);
 
-    let statusBadge = '<span class="badge badge-secondary">Pending Preview</span>';
-    if (r.status === 'previewed') statusBadge = '<span class="badge badge-blue">✓ Previewed</span>';
-    if (r.status === 'ready') statusBadge = '<span class="badge badge-emerald">Ready to Send</span>';
-    if (r.status === 'sent') statusBadge = '<span class="badge badge-purple">Sent</span>';
+    let statusBadge = '<span class="studio-pill-badge" style="color: #94a3b8;"><span style="color:#64748b;">●</span> Pending</span>';
+    if (r.status === 'previewed') statusBadge = '<span class="studio-pill-badge" style="color: #60a5fa; border-color: rgba(59,130,246,0.3);"><span style="color:#3b82f6;">●</span> Previewed</span>';
+    if (r.status === 'ready') statusBadge = '<span class="studio-ready-pill"><span>●</span> Ready</span>';
+    if (r.status === 'sent') statusBadge = '<span class="studio-pill-badge" style="color: #c084fc; border-color: rgba(168,85,247,0.3);"><span style="color:#a855f7;">●</span> Sent</span>';
 
     return `
-      <tr class="${isSelected ? 'active-row' : ''}" style="${isSelected ? 'background: rgba(99, 102, 241, 0.12);' : ''}" onclick="selectRecipientForEdit('${r.id}')">
+      <tr class="${isSelected ? 'active-row' : ''}" onclick="selectRecipientForEdit('${r.id}')">
         <td onclick="event.stopPropagation();">
           <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectRecipient('${r.id}', this.checked)">
         </td>
         <td>
-          <div style="font-weight: 600; color: #fff;">${escapeHtml(r.company)}</div>
-          <div style="font-size: 0.75rem; color: var(--text-dim);">${escapeHtml(r.name || 'Hiring Team')}</div>
+          <div class="recipient-flex-cell">
+            <div class="company-avatar ${colorClass}">${letter}</div>
+            <div class="recipient-info-col">
+              <span class="recipient-company-name">${escapeHtml(r.company)}</span>
+              <span class="recipient-contact-line">
+                ${escapeHtml(r.name || 'Hiring Team')} &bull; 
+                ${r.email ? `<span class="font-mono text-dim">${escapeHtml(r.email)}</span>` : '<span class="text-rose text-xs" style="font-weight:600;">⚠️ Missing Email</span>'}
+              </span>
+            </div>
+          </div>
         </td>
         <td>
-          ${r.email ? `<span style="font-family: var(--font-mono); font-size: 0.75rem;">${escapeHtml(r.email)}</span>` : '<span class="text-rose text-xs">⚠️ Email missing</span>'}
-        </td>
-        <td>
-          <span class="skill-tag">${escapeHtml(r.role || 'Generative AI & Backend')}</span>
+          <span class="role-tag-subtle" title="${escapeHtml(r.role || 'Generative AI & Backend')}">${escapeHtml(r.role || 'Generative AI & Backend')}</span>
         </td>
         <td>${statusBadge}</td>
-        <td onclick="event.stopPropagation();" style="display: flex; gap: 0.35rem; align-items: center;">
-          <button class="btn btn-xs btn-outline" onclick="selectRecipientForEdit('${r.id}')" title="Preview & Customize Email">Preview</button>
-          <button class="btn btn-xs btn-purple" onclick="enrichRecipientContact('${r.id}', '${escapeHtml(r.company)}', '${escapeHtml(r.link || '')}')" title="Find HR / Founder on LinkedIn & Google">🔍 Find HR</button>
-          <button class="btn btn-xs btn-rose" onclick="deleteRecipient('${r.id}')" title="Remove from queue">&times;</button>
+        <td onclick="event.stopPropagation();" style="text-align: right;">
+          <div class="row-actions-group">
+            <button type="button" class="row-action-btn" onclick="selectRecipientForEdit('${r.id}'); openAiEnhanceModal();" title="AI Personalize with Company Intelligence">✨</button>
+            <button type="button" class="row-action-btn" onclick="enrichRecipientContact('${r.id}', '${escapeHtml(r.company)}', '${escapeHtml(r.link || '')}')" title="Search LinkedIn & Google for Contacts">🔍</button>
+            <button type="button" class="row-action-btn btn-delete" onclick="deleteRecipient('${r.id}')" title="Remove from queue">&times;</button>
+          </div>
         </td>
       </tr>
     `;
@@ -596,16 +657,25 @@ function renderOutreachTable(recipients) {
 
 function filterOutreachRecipients() {
   const query = (document.getElementById('outreachSearchInput')?.value || '').toLowerCase().trim();
-  const all = state.outreach.recipients || [];
-  if (!query) {
-    renderOutreachTable(all);
-    return;
+  const filter = state.activeOutreachFilter || 'all';
+  let list = state.outreach.recipients || [];
+
+  if (filter === 'ready') {
+    list = list.filter(r => r.status === 'ready');
+  } else if (filter === 'previewed') {
+    list = list.filter(r => r.status === 'previewed');
+  } else if (filter === 'pending') {
+    list = list.filter(r => !r.status || r.status === 'pending');
   }
-  const filtered = all.filter(r => {
-    const text = `${r.company} ${r.name} ${r.email} ${r.role}`.toLowerCase();
-    return text.includes(query);
-  });
-  renderOutreachTable(filtered);
+
+  if (query) {
+    list = list.filter(r => {
+      const text = `${r.company} ${r.name} ${r.email} ${r.role}`.toLowerCase();
+      return text.includes(query);
+    });
+  }
+
+  renderOutreachTable(list);
 }
 
 function toggleSelectAllRecipients(checked) {
@@ -619,7 +689,7 @@ function toggleSelectAllRecipients(checked) {
   } else {
     state.selectedRecipientIds.clear();
   }
-  renderOutreachTable(all);
+  filterOutreachRecipients();
 }
 
 function toggleSelectRecipient(id, checked) {
@@ -630,21 +700,54 @@ function toggleSelectRecipient(id, checked) {
   }
 }
 
+function toggleSenderConfigDrawer() {
+  const drawer = document.getElementById('senderConfigDrawer');
+  const text = document.getElementById('senderDrawerToggleText');
+  if (!drawer) return;
+  const isHidden = drawer.style.display === 'none';
+  drawer.style.display = isHidden ? 'block' : 'none';
+  if (text) text.textContent = isHidden ? 'Hide Sender Details ▲' : 'Configure Sender ▼';
+}
+
+function openAiEnhanceWithPreset(preset) {
+  openAiEnhanceModal();
+  applyPromptPreset(preset);
+}
+
 async function selectRecipientForEdit(id) {
   const rec = (state.outreach.recipients || []).find(r => r.id === id);
   if (!rec) return;
 
   state.selectedRecipient = rec;
 
-  // Header
-  document.getElementById('editorTargetHeader').textContent = `Email for ${rec.company}`;
-  document.getElementById('editorTargetSub').textContent = `Candidate Outreach to: ${rec.name || 'Hiring Team'} (${rec.email || 'Email not yet entered'})`;
+  // Header Avatar & Title
+  const { letter, colorClass } = getCompanyAvatarMeta(rec.company);
+  const avatarEl = document.getElementById('editorCompanyAvatar');
+  if (avatarEl) {
+    avatarEl.textContent = letter;
+    avatarEl.className = `company-logo-avatar ${colorClass}`;
+  }
+
+  const headerEl = document.getElementById('editorTargetHeader');
+  if (headerEl) headerEl.textContent = `Email for ${rec.company}`;
+
+  const subEl = document.getElementById('editorTargetSub');
+  if (subEl) subEl.textContent = `Outreach to ${rec.name || 'Hiring Team'} (${rec.email || 'Email not yet entered'})`;
+
+  const roleBadge = document.getElementById('editorRoleBadge');
+  if (roleBadge) roleBadge.textContent = rec.role || 'Generative AI & Backend';
 
   // Populate Meta fields
   document.getElementById('editCompany').value = rec.company || '';
   document.getElementById('editName').value = rec.name || '';
   document.getElementById('editEmail').value = rec.email || '';
   document.getElementById('editRole').value = rec.role || '';
+
+  // Update sender summary text
+  const senderSummary = document.getElementById('senderSummaryText');
+  if (senderSummary) {
+    senderSummary.textContent = `${state.senderName || 'Yash Giradkar'} (${state.senderEmail || 'yashgiradkar02@gmail.com'})`;
+  }
 
   // Fetch or generate preview content
   try {
@@ -670,7 +773,7 @@ async function selectRecipientForEdit(id) {
   // Update Mark as Ready button state
   const btnMark = document.getElementById('btnMarkReady');
   if (rec.status === 'ready') {
-    btnMark.textContent = '✓ Ready for Dispatch';
+    btnMark.textContent = '✓ Ready to Send';
     btnMark.className = 'btn btn-sm btn-emerald';
   } else if (rec.status === 'previewed') {
     btnMark.textContent = '✓ Previewed (Click to Set Ready)';
@@ -681,7 +784,7 @@ async function selectRecipientForEdit(id) {
   }
 
   // Re-render table to highlight active row
-  renderOutreachTable(state.outreach.recipients || []);
+  filterOutreachRecipients();
 }
 
 function switchEditorTab(tab) {
@@ -1953,4 +2056,8 @@ window.executeAiEnhancement = executeAiEnhancement;
 window.switchAiResultTab = switchAiResultTab;
 window.toggleAiBodyView = toggleAiBodyView;
 window.applyAiEnhancedDraftToEditor = applyAiEnhancedDraftToEditor;
+window.setOutreachFilter = setOutreachFilter;
+window.toggleSenderConfigDrawer = toggleSenderConfigDrawer;
+window.openAiEnhanceWithPreset = openAiEnhanceWithPreset;
+
 

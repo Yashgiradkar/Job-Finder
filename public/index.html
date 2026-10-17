@@ -367,210 +367,277 @@
         </section>
 
         <!-- ======================================================== -->
-        <!-- TAB 4: Cold Outreach & Referrals -->
+        <!-- TAB 4: Cold Outreach & Referrals (Next-Gen Studio) -->
         <!-- ======================================================== -->
         <section class="tab-pane" id="tab-outreach">
-          <div class="section-header">
-            <div>
-              <h2 class="section-title">📬 Cold Outreach & Referral Studio</h2>
-              <p class="section-subtitle">Editable preview emails, recipient list management, batch 30 startups campaigns, and strict anti-spam preview safeguards.</p>
+          <!-- Next-Gen Studio Command Header -->
+          <div class="studio-header">
+            <div class="studio-title-area">
+              <div class="studio-badge-icon">📬</div>
+              <div>
+                <div class="studio-heading-row">
+                  <h2 class="studio-title">Cold Outreach Studio</h2>
+                  <span class="studio-pill-badge" id="outreachQueueCountPill"><span id="outreachQueueCount">0</span> in Queue</span>
+                  <span class="studio-ready-pill" id="studioApprovedBadge"><span id="approvedCountDisplay">0</span> Ready to Send</span>
+                </div>
+                <p class="studio-desc">Hyper-personalized AI cold outreach · Real-time company intelligence · 100% human-previewed safety</p>
+              </div>
             </div>
-            <div class="queue-actions">
-              <button class="btn btn-purple btn-sm" id="btnEnrichBatchContacts" onclick="enrichBatchContacts()" title="Search LinkedIn/Google for Founders & HR emails for companies in queue">
-                🔍 Find HR / Founders
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btnPopulate30Startups" onclick="populate30Startups()">
-                ⚡ Load 30 Startups Batch
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btnAddRecipient" onclick="openAddRecipientModal()">
-                ➕ Add Recipient
-              </button>
-              <button class="btn btn-primary btn-sm" id="btnSendBatchApproved" onclick="confirmBatchSend()">
-                🚀 Send Approved Batch (<span id="approvedCountDisplay">0</span>)
-              </button>
+
+            <div class="studio-toolbar">
+              <!-- Integrated Status Indicators -->
+              <div class="studio-status-strip">
+                <div class="status-pill status-pill-db" id="mongoStatusBar" title="MongoDB Connection Status">
+                  <span class="pulse-dot"></span>
+                  <span class="pill-label">DB:</span>
+                  <span class="font-mono" id="mongoDbHost">127.0.0.1:27017</span>
+                  <span class="pill-meta" id="mongoPillCounts">(<strong id="mongoLogsCount">0</strong> sent · <strong id="mongoContactsCount">0</strong> enriched)</span>
+                  <button class="btn-icon-subtle" onclick="loadMongoLogsAndContacts()" title="Refresh MongoDB Records">🔄</button>
+                </div>
+                <div class="status-pill status-pill-safe" title="Zero automated emails sent. Human preview and approval required for every dispatch.">
+                  <span class="shield-icon">🛡️</span>
+                  <span>Safe Mode Active</span>
+                </div>
+              </div>
+
+              <!-- Primary Action Controls -->
+              <div class="studio-btn-group">
+                <button class="btn btn-sm btn-ghost" id="btnPopulate30Startups" onclick="populate30Startups()" title="Load curated batch from Agentic AI startups directory">
+                  ⚡ 30 Startups
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btnEnrichBatchContacts" onclick="enrichBatchContacts()" title="Search LinkedIn & Google for Founders & HR emails">
+                  🔍 Find Contacts
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btnAddRecipient" onclick="openAddRecipientModal()" title="Add custom company recipient">
+                  ➕ Add
+                </button>
+                <button class="btn btn-sm btn-primary btn-glow" id="btnSendBatchApproved" onclick="confirmBatchSend()">
+                  🚀 Send Approved Batch (<span id="approvedCountDisplayBtn">0</span>)
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- MongoDB Live Connection & Audit Status Bar -->
-          <div class="mongo-status-bar" id="mongoStatusBar">
-            <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <span class="status-dot online"></span>
-              <strong>MongoDB Database:</strong>
-              <span class="font-mono text-emerald" id="mongoDbHost">127.0.0.1:27017 / ai_job_hunter</span>
-            </div>
-            <div style="display: flex; gap: 1.25rem; align-items: center; font-size: 0.8rem;">
-              <span>Sent Logs in DB: <strong id="mongoLogsCount" class="text-indigo">0</strong></span>
-              <span>Enriched Contacts: <strong id="mongoContactsCount" class="text-purple">0</strong></span>
-              <button class="btn btn-xs btn-outline" onclick="loadMongoLogsAndContacts()">🔄 Refresh DB</button>
-            </div>
-          </div>
-
-          <!-- Anti-Spam Safety Notice -->
-          <div class="safety-banner">
-            <div class="safety-icon">🛡️</div>
-            <div class="safety-content">
-              <strong>Strict Safety Guardrail Active:</strong> Cold emails are <em>never</em> sent automatically. Each email must be previewed and approved. You can test-send any customized draft directly to your own inbox (<code>yashgiradkar02@gmail.com</code>) with zero risk before sending to any recipient.
-            </div>
-          </div>
-
+          <!-- Studio Two-Column Grid -->
           <div class="outreach-grid">
-            <!-- Left: Recipient Queue Manager -->
+            <!-- Left Panel: Recipient Queue Manager -->
             <div class="card outreach-list-card">
-              <div class="card-header">
+              <div class="card-header" style="padding-bottom: 0.6rem; margin-bottom: 0.6rem;">
                 <div>
-                  <h3 style="font-size: 1rem;">Outreach Queue (<span id="outreachQueueCount">0</span>)</h3>
-                  <span class="text-dim text-xs">Click any recipient to load & edit their email preview</span>
+                  <h3 style="font-size: 0.95rem; font-weight: 700; color: #fff;">Queue Pipeline</h3>
+                  <span class="text-dim text-xs">Select any company to load, research & personalize</span>
                 </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <button class="btn btn-xs btn-outline" id="btnSelectAllRecipients" onclick="toggleSelectAllRecipients()">Select All</button>
+                <button class="btn btn-xs btn-ghost" id="btnSelectAllRecipients" onclick="toggleSelectAllRecipients()">Select All</button>
+              </div>
+
+              <!-- Filter Pills (All / Ready / Previewed / Pending) -->
+              <div class="queue-filter-tabs">
+                <button type="button" class="filter-tab active" data-filter="all" onclick="setOutreachFilter('all')">
+                  All (<span id="filterCountAll">0</span>)
+                </button>
+                <button type="button" class="filter-tab" data-filter="ready" onclick="setOutreachFilter('ready')">
+                  Ready (<span id="filterCountReady">0</span>)
+                </button>
+                <button type="button" class="filter-tab" data-filter="previewed" onclick="setOutreachFilter('previewed')">
+                  Previewed (<span id="filterCountPreviewed">0</span>)
+                </button>
+                <button type="button" class="filter-tab" data-filter="pending" onclick="setOutreachFilter('pending')">
+                  Pending (<span id="filterCountPending">0</span>)
+                </button>
+              </div>
+
+              <!-- Search Bar -->
+              <div class="queue-search-container">
+                <div class="search-input-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="outreachSearchInput" class="input-search" placeholder="Filter company, contact, or role..." oninput="filterOutreachRecipients()">
                 </div>
               </div>
 
-              <div class="recipient-search-bar" style="margin-bottom: 0.75rem;">
-                <input type="text" id="outreachSearchInput" class="input-full" placeholder="Filter recipients by company, name, role..." oninput="filterOutreachRecipients()">
-              </div>
-
-              <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
-                <table class="data-table" id="outreachRecipientsTable">
+              <!-- High-Density Queue Table -->
+              <div class="table-responsive queue-table-wrapper">
+                <table class="data-table queue-table" id="outreachRecipientsTable">
                   <thead>
                     <tr>
-                      <th style="width: 30px;"><input type="checkbox" id="chkSelectAll" onchange="toggleSelectAllRecipients(this.checked)"></th>
-                      <th>Company / Name</th>
-                      <th>Email</th>
+                      <th style="width: 28px;"><input type="checkbox" id="chkSelectAll" onchange="toggleSelectAllRecipients(this.checked)"></th>
+                      <th>Company & Contact</th>
                       <th>Target Role</th>
                       <th>Status</th>
-                      <th>Action</th>
+                      <th style="text-align: right;">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="outreachRecipientsBody">
-                    <tr><td colspan="6" class="text-center py-4 text-muted">Loading outreach queue...</td></tr>
+                    <tr><td colspan="5" class="text-center py-6 text-muted">Loading outreach queue...</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
 
-            <!-- Right: Interactive Email Editor & Live Preview -->
+            <!-- Right Panel: Next-Gen Email Composer & Preview Studio -->
             <div class="card outreach-editor-card">
-              <div class="card-header">
-                <div>
-                  <h3 style="font-size: 1rem;" id="editorTargetHeader">Email Preview & Editor</h3>
-                  <span class="text-dim text-xs" id="editorTargetSub">Select a recipient on the left to edit</span>
+              <!-- Editor Studio Header -->
+              <div class="editor-studio-header">
+                <div class="editor-target-profile">
+                  <div class="company-logo-avatar" id="editorCompanyAvatar">C</div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <h3 class="editor-target-company" id="editorTargetHeader">Email Preview & Editor</h3>
+                      <span class="badge badge-sm badge-indigo" id="editorRoleBadge">Generative AI</span>
+                    </div>
+                    <span class="editor-target-sub" id="editorTargetSub">Select a recipient on the left to edit</span>
+                  </div>
                 </div>
-                <div class="tab-pills" style="display: flex; gap: 0.5rem; align-items: center;">
-                  <button class="btn btn-xs btn-ai-enhance" id="btnOpenAiEnhance" onclick="openAiEnhanceModal()" title="Prompt LLM to enhance email with company latest data, headlines & passion">
-                    <span class="sparkle">✨</span> AI Prompt & Enhance
+
+                <!-- Studio Segmented Mode Switcher -->
+                <div class="segmented-control">
+                  <button type="button" class="segment-btn btn-ai-sparkle" id="btnOpenAiEnhance" onclick="openAiEnhanceModal()" title="Prompt LLM to enhance email with company latest data, headlines & passion">
+                    <span class="sparkle">✨</span> AI Personalize
                   </button>
-                  <button class="btn btn-xs btn-outline active" id="btnTabEditEmail" onclick="switchEditorTab('edit')">✏️ Edit Draft</button>
-                  <button class="btn btn-xs btn-outline" id="btnTabPreviewHtml" onclick="switchEditorTab('preview')">👁️ Live Preview</button>
+                  <button type="button" class="segment-btn active" id="btnTabEditEmail" onclick="switchEditorTab('edit')">
+                    ✏️ Compose
+                  </button>
+                  <button type="button" class="segment-btn" id="btnTabPreviewHtml" onclick="switchEditorTab('preview')">
+                    👁️ Preview
+                  </button>
                 </div>
               </div>
 
-              <!-- Sender & Attachment Configuration Bar (100% UI Editable - Zero JSON) -->
-              <div class="editor-sender-bar">
-                <div class="meta-field">
-                  <label>Sender Name:</label>
-                  <input type="text" id="editSenderName" class="input-meta" value="Yash Giradkar" placeholder="Your Name" oninput="onSenderFieldChange()">
+              <!-- Streamlined Compose Meta Strip -->
+              <div class="compose-meta-strip">
+                <div class="meta-inline-grid">
+                  <div class="meta-chip-box">
+                    <span class="meta-chip-label">To Contact:</span>
+                    <input type="text" id="editName" class="meta-chip-input" placeholder="Contact Name" oninput="onRecipientFieldChange()">
+                  </div>
+                  <div class="meta-chip-box">
+                    <span class="meta-chip-label">Recipient Email:</span>
+                    <input type="email" id="editEmail" class="meta-chip-input font-mono" placeholder="recipient@company.com" oninput="onRecipientFieldChange()">
+                  </div>
+                  <div class="meta-chip-box">
+                    <span class="meta-chip-label">Company:</span>
+                    <input type="text" id="editCompany" class="meta-chip-input" placeholder="Company" oninput="onRecipientFieldChange()">
+                  </div>
+                  <div class="meta-chip-box">
+                    <span class="meta-chip-label">Target Role:</span>
+                    <input type="text" id="editRole" class="meta-chip-input" placeholder="Role Title" oninput="onRecipientFieldChange()">
+                  </div>
                 </div>
-                <div class="meta-field">
-                  <label>Sender Email (SMTP):</label>
-                  <input type="email" id="editSenderEmail" class="input-meta" value="yashgiradkar02@gmail.com" placeholder="your@email.com" oninput="onSenderFieldChange()">
-                </div>
-                <div class="meta-field meta-field-grow">
-                  <label style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>Resume / Attachment:</span>
-                    <span id="attachmentStatusBadge" class="badge badge-emerald" style="font-size: 0.7rem; padding: 0.15rem 0.4rem;">📎 Verified</span>
-                  </label>
-                  <input type="text" id="editAttachmentPath" class="input-meta font-mono" value="./Yash_Giradkar_Resume.pdf" placeholder="./Yash_Giradkar_Resume.pdf" oninput="onAttachmentPathChange()">
-                </div>
-              </div>
 
-              <!-- Recipient Metadata Bar (100% UI Editable) -->
-              <div class="editor-meta-bar">
-                <div class="meta-field">
-                  <label>Company:</label>
-                  <input type="text" id="editCompany" class="input-meta" placeholder="Company Name" oninput="onRecipientFieldChange()">
+                <!-- Expandable Sender & Attachment Drawer Toggle -->
+                <div class="sender-drawer-toggle" onclick="toggleSenderConfigDrawer()">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span>⚙️</span>
+                    <span style="font-size: 0.75rem; color: #cbd5e1;">From: <strong id="senderSummaryText">Yash Giradkar (yashgiradkar02@gmail.com)</strong></span>
+                    <span id="attachmentStatusBadge" class="badge badge-emerald badge-xs">📎 Resume Verified (112 KB)</span>
+                  </div>
+                  <span class="text-dim text-xs" id="senderDrawerToggleText">Configure Sender ▼</span>
                 </div>
-                <div class="meta-field">
-                  <label>Recipient Contact:</label>
-                  <input type="text" id="editName" class="input-meta" placeholder="Contact Name" oninput="onRecipientFieldChange()">
-                </div>
-                <div class="meta-field">
-                  <label>To Email (Recipient):</label>
-                  <input type="email" id="editEmail" class="input-meta" placeholder="recipient@company.com" oninput="onRecipientFieldChange()">
-                </div>
-                <div class="meta-field">
-                  <label>Target Role:</label>
-                  <input type="text" id="editRole" class="input-meta" placeholder="Role Title" oninput="onRecipientFieldChange()">
-                </div>
-              </div>
 
-              <!-- Subject Line (Editable) -->
-              <div class="editor-section">
-                <label class="editor-label">
-                  <span>Subject Line:</span>
-                  <span class="text-dim text-xs">Live tokens & preview</span>
-                </label>
-                <input type="text" id="editSubject" class="input-full font-mono" placeholder="Request for an Interview Opportunity - {{role}} at {{company}}" oninput="onSubjectChange()">
-              </div>
-
-              <!-- Token Helper Chips -->
-              <div class="token-chips">
-                <span class="text-dim text-xs">Insert token:</span>
-                <button type="button" class="token-chip" onclick="insertToken('{{name}}')">{{name}}</button>
-                <button type="button" class="token-chip" onclick="insertToken('{{company}}')">{{company}}</button>
-                <button type="button" class="token-chip" onclick="insertToken('{{role}}')">{{role}}</button>
-                <button type="button" class="token-chip" onclick="insertToken('{{link}}')">{{link}}</button>
-                <button type="button" class="token-chip" onclick="insertToken('{{senderName}}')">{{senderName}}</button>
-              </div>
-
-              <!-- Edit Mode View -->
-              <div id="editorEditView" class="editor-view-pane active">
-                <div class="ai-prompt-shortcut-bar" onclick="openAiEnhanceModal()">
-                  <div class="ai-shortcut-left">
-                    <span class="ai-sparkle-icon">✨</span>
-                    <div>
-                      <strong>Add Prompt to Enhance with LLM:</strong>
-                      <span>Fetch company latest data, headlines, what it does & passion, synthesized with your real accomplishments.</span>
+                <!-- Collapsible Sender Configuration Details -->
+                <div id="senderConfigDrawer" class="sender-config-drawer" style="display: none;">
+                  <div class="editor-sender-bar">
+                    <div class="meta-field">
+                      <label>Sender Name:</label>
+                      <input type="text" id="editSenderName" class="input-meta" value="Yash Giradkar" placeholder="Your Name" oninput="onSenderFieldChange()">
+                    </div>
+                    <div class="meta-field">
+                      <label>Sender Email (SMTP):</label>
+                      <input type="email" id="editSenderEmail" class="input-meta" value="yashgiradkar02@gmail.com" placeholder="your@email.com" oninput="onSenderFieldChange()">
+                    </div>
+                    <div class="meta-field meta-field-grow">
+                      <label>Resume / Attachment Path:</label>
+                      <input type="text" id="editAttachmentPath" class="input-meta font-mono" value="./Yash_Giradkar_Resume.pdf" placeholder="./Yash_Giradkar_Resume.pdf" oninput="onAttachmentPathChange()">
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- AI Copilot Quick Personalize Strip -->
+              <div class="studio-copilot-banner" onclick="openAiEnhanceModal()">
+                <div class="copilot-left">
+                  <span class="copilot-sparkle">✨</span>
+                  <div class="copilot-text">
+                    <strong>AI Copilot & Company Intel:</strong>
+                    <span>Auto-incorporate latest headlines, what they do, passion & your 83% latency reduction.</span>
+                  </div>
+                </div>
+                <div class="copilot-actions">
+                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('concise')">⚡ 120w Exec</button>
+                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('tech')">🚀 RAG & Latency</button>
+                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('agentic')">🤖 Agentic AI</button>
                   <button type="button" class="btn btn-xs btn-primary">Open AI Enhancer</button>
                 </div>
-
-                <label class="editor-label">Email Body (HTML / Markdown):</label>
-                <textarea id="editEmailBody" class="editor-textarea" rows="12" placeholder="Draft your email message..." oninput="onBodyChange()"></textarea>
               </div>
 
-              <!-- Live Preview View -->
-              <div id="editorPreviewView" class="editor-view-pane">
-                <div class="email-mockup-wrapper">
-                  <div class="email-mockup-header">
-                    <div><strong>From:</strong> <span id="mockupFrom">Yash Giradkar &lt;yashgiradkar02@gmail.com&gt;</span></div>
-                    <div><strong>To:</strong> <span id="mockupTo">Sarah Chen &lt;sarah.chen@bytedance.com&gt;</span></div>
-                    <div><strong>Subject:</strong> <span id="mockupSubject">Subject Preview</span></div>
-                    <div><strong>Attachment:</strong> <span id="mockupAttachment" class="badge badge-sm badge-secondary">📎 Yash_Giradkar_Resume.pdf</span></div>
+              <!-- Subject Line Bar with Tokens -->
+              <div class="subject-bar-container">
+                <div class="subject-label-row">
+                  <span class="editor-label-title">Subject Line:</span>
+                  <div class="token-chips-inline">
+                    <span class="text-dim text-xs">Tokens:</span>
+                    <button type="button" class="token-chip" onclick="insertToken('{{company}}')">{{company}}</button>
+                    <button type="button" class="token-chip" onclick="insertToken('{{role}}')">{{role}}</button>
+                    <button type="button" class="token-chip" onclick="insertToken('{{name}}')">{{name}}</button>
+                    <button type="button" class="token-chip" onclick="insertToken('{{senderName}}')">{{senderName}}</button>
                   </div>
-                  <div class="email-mockup-body" id="mockupHtmlBody">
-                    <!-- Live preview content rendered here -->
+                </div>
+                <input type="text" id="editSubject" class="input-subject font-mono" placeholder="Request for an Interview Opportunity - {{role}} at {{company}}" oninput="onSubjectChange()">
+              </div>
+
+              <!-- Editor / Preview Viewport Container -->
+              <div class="editor-viewport-container">
+                <!-- Compose Mode View -->
+                <div id="editorEditView" class="editor-view-pane active">
+                  <textarea id="editEmailBody" class="editor-textarea" placeholder="Draft your personalized email message..." oninput="onBodyChange()"></textarea>
+                </div>
+
+                <!-- Realistic Superhuman / Apple Mail Preview View -->
+                <div id="editorPreviewView" class="editor-view-pane">
+                  <div class="email-mockup-wrapper">
+                    <div class="email-mockup-header">
+                      <div class="mockup-meta-row">
+                        <div class="mockup-avatar">YG</div>
+                        <div class="mockup-sender-details">
+                          <div class="mockup-from-line">
+                            <strong id="mockupFrom">Yash Giradkar &lt;yashgiradkar02@gmail.com&gt;</strong>
+                            <span class="mockup-time-stamp">Today, Just now</span>
+                          </div>
+                          <div class="mockup-to-line">
+                            <span class="text-dim text-xs">To:</span> <span id="mockupTo">Sarah Chen &lt;sarah.chen@bytedance.com&gt;</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mockup-subject-line">
+                        <span class="text-dim text-xs">Subject:</span> <strong id="mockupSubject">Subject Preview</strong>
+                      </div>
+                      <div class="mockup-attachment-bar">
+                        <span id="mockupAttachment" class="badge badge-sm badge-secondary">📎 Yash_Giradkar_Resume.pdf (112.5 KB)</span>
+                        <span class="badge badge-emerald badge-xs">✓ Verified on Disk</span>
+                      </div>
+                    </div>
+                    <div class="email-mockup-body" id="mockupHtmlBody">
+                      <!-- Live preview content rendered here -->
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Editor Action Buttons -->
+              <!-- Sticky Docked Action Bar -->
               <div class="editor-actions-bar">
-                <div style="display: flex; gap: 0.5rem;">
-                  <button class="btn btn-sm btn-secondary" onclick="saveCurrentDraft()">
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <button class="btn btn-sm btn-secondary" onclick="saveCurrentDraft()" title="Save changes to your local draft">
                     💾 Save Draft
                   </button>
-                  <button class="btn btn-sm btn-amber" onclick="sendTestPreviewToMe()" title="Sends strictly to YOUR verified email address in .env">
-                    📨 Send Test to My Email
+                  <button class="btn btn-sm btn-ghost-amber" onclick="sendTestPreviewToMe()" title="Sends strictly to YOUR verified email address in .env (zero risk)">
+                    📨 Send Test to Me
                   </button>
                 </div>
 
-                <div style="display: flex; gap: 0.5rem;">
+                <div style="display: flex; gap: 0.6rem; align-items: center;">
                   <button class="btn btn-sm btn-outline" id="btnMarkReady" onclick="toggleMarkReady()">
                     ✓ Mark as Previewed
                   </button>
-                  <button class="btn btn-sm btn-primary" id="btnSendSingleRecipient" onclick="sendSingleOutreachEmail()">
+                  <button class="btn btn-sm btn-primary btn-glow" id="btnSendSingleRecipient" onclick="sendSingleOutreachEmail()">
                     📤 Send to this Recipient
                   </button>
                 </div>
