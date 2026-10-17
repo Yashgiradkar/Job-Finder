@@ -20,6 +20,7 @@ import {
   getAllCompanyContacts 
 } from './db/mongo.js';
 import { enrichCompanyContacts } from './outreach/contactEnricher.js';
+import { enhanceEmailWithPrompt, fetchCompanyLiveIntel } from './outreach/aiEnhancer.js';
 import { config } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -539,6 +540,75 @@ app.post('/api/outreach/verify-attachment', async (req, res) => {
         error: `File not found at: ${target}`
       });
     }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: AI Email Personalization & Prompt Enhancer
+app.post('/api/outreach/enhance-email', async (req, res) => {
+  try {
+    const { id, company, role, recipientName, link, prompt, provider, apiKey, model, ollamaUrl } = req.body;
+    
+    if (!company) {
+      return res.status(400).json({ success: false, error: 'Company name is required for AI enhancement.' });
+    }
+
+    broadcastLog(`🤖 Researching ${company} (what it does, headlines, passion, latest moves)...`, 'system');
+
+    const result = await enhanceEmailWithPrompt({
+      company,
+      role,
+      recipientName,
+      link,
+      userPrompt: prompt,
+      provider: provider || 'gemini',
+      apiKey: apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
+      model,
+      ollamaUrl
+    });
+
+    if (id) {
+      const queue = await getOutreachQueue();
+      const item = queue.find(q => q.id === id);
+      if (item) {
+        item.customSubject = result.subject;
+        item.customBody = result.html;
+        item.status = 'previewed';
+        item.aiEnhanced = true;
+        item.lastEnhancedAt = new Date().toISOString();
+        await saveOutreachQueue(queue);
+      }
+    }
+
+    broadcastLog(`✨ AI Email enhancement finished for ${company} (${result.providerUsed})`, 'success');
+    res.json({
+      success: true,
+      subject: result.subject,
+      html: result.html,
+      text: result.text,
+      companyIntel: result.companyIntel,
+      companyHighlightsUsed: result.companyHighlightsUsed || [],
+      reasoning: result.reasoning || '',
+      providerUsed: result.providerUsed,
+      warning: result.warning,
+      note: result.note
+    });
+  } catch (err) {
+    broadcastLog(`❌ AI enhancement error: ${err.message}`, 'error');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Live Company Intelligence Search
+app.post('/api/outreach/company-intel', async (req, res) => {
+  try {
+    const { company, role, link } = req.body;
+    if (!company) {
+      return res.status(400).json({ success: false, error: 'Company name is required.' });
+    }
+    const intel = await fetchCompanyLiveIntel(company, role, link);
+    res.json({ success: true, intel });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -456,7 +456,10 @@
                   <h3 style="font-size: 1rem;" id="editorTargetHeader">Email Preview & Editor</h3>
                   <span class="text-dim text-xs" id="editorTargetSub">Select a recipient on the left to edit</span>
                 </div>
-                <div class="tab-pills">
+                <div class="tab-pills" style="display: flex; gap: 0.5rem; align-items: center;">
+                  <button class="btn btn-xs btn-ai-enhance" id="btnOpenAiEnhance" onclick="openAiEnhanceModal()" title="Prompt LLM to enhance email with company latest data, headlines & passion">
+                    <span class="sparkle">✨</span> AI Prompt & Enhance
+                  </button>
                   <button class="btn btn-xs btn-outline active" id="btnTabEditEmail" onclick="switchEditorTab('edit')">✏️ Edit Draft</button>
                   <button class="btn btn-xs btn-outline" id="btnTabPreviewHtml" onclick="switchEditorTab('preview')">👁️ Live Preview</button>
                 </div>
@@ -522,6 +525,17 @@
 
               <!-- Edit Mode View -->
               <div id="editorEditView" class="editor-view-pane active">
+                <div class="ai-prompt-shortcut-bar" onclick="openAiEnhanceModal()">
+                  <div class="ai-shortcut-left">
+                    <span class="ai-sparkle-icon">✨</span>
+                    <div>
+                      <strong>Add Prompt to Enhance with LLM:</strong>
+                      <span>Fetch company latest data, headlines, what it does & passion, synthesized with your real accomplishments.</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-xs btn-primary">Open AI Enhancer</button>
+                </div>
+
                 <label class="editor-label">Email Body (HTML / Markdown):</label>
                 <textarea id="editEmailBody" class="editor-textarea" rows="12" placeholder="Draft your email message..." oninput="onBodyChange()"></textarea>
               </div>
@@ -887,6 +901,205 @@
         </div>
         <div class="modal-footer" style="padding: 0.75rem 1.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
           <button type="button" class="btn btn-secondary btn-sm" onclick="closeViewEmailLogModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Prompt & Company Intelligence Enhancement Modal -->
+    <div class="modal-overlay" id="aiEnhanceModal">
+      <div class="modal-content" style="max-width: 860px; max-height: 90vh;">
+        <div class="modal-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">✨</span>
+              <h3 class="modal-title">AI Prompt & Company Intelligence Enhancer</h3>
+            </div>
+            <span class="modal-subtitle">Enrich with live company data, what it does, headlines & passion synthesized with Yash's profile</span>
+          </div>
+          <button class="btn-icon" onclick="closeAiEnhanceModal()">&times;</button>
+        </div>
+
+        <div class="modal-body" style="padding: 1.25rem 1.5rem;">
+          <!-- Target Recipient Context Badge -->
+          <div class="ai-target-banner">
+            <div class="ai-target-col">
+              <span class="ai-target-label">Target Company</span>
+              <strong class="ai-target-val text-indigo" id="aiModalCompany">Select Recipient</strong>
+            </div>
+            <div class="ai-target-col">
+              <span class="ai-target-label">Target Role</span>
+              <span class="ai-target-val" id="aiModalRole">Generative AI & Backend Engineer</span>
+            </div>
+            <div class="ai-target-col">
+              <span class="ai-target-label">Recipient Contact</span>
+              <span class="ai-target-val" id="aiModalRecipient">Hiring Team</span>
+            </div>
+            <div class="ai-target-col">
+              <span class="ai-target-label">Candidate Profile</span>
+              <span class="badge badge-emerald" style="font-size: 0.7rem;">Yash Giradkar (2–4 Yrs)</span>
+            </div>
+          </div>
+
+          <!-- Prompt Customization Section -->
+          <div class="mt-4">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <label class="editor-label" style="margin: 0; font-weight: 600; color: #f8fafc;">
+                Prompt Instructions for LLM:
+              </label>
+              <span class="text-dim text-xs">Edit prompt below to steer angle, focus, or length</span>
+            </div>
+
+            <textarea id="aiPromptText" class="editor-textarea font-mono" rows="4" style="font-size: 0.85rem; line-height: 1.5; resize: vertical;" placeholder="Add custom prompt instructions for the LLM..."></textarea>
+
+            <!-- Prompt Preset Quick Chips -->
+            <div class="prompt-chips-wrapper mt-2">
+              <span class="text-dim text-xs">Prompt Presets:</span>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('default')">⚡ Balanced & Punchy</button>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('concise')">⏱️ Executive (<120 words)</button>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('tech')">🚀 Deep Tech (RAG & 83% Latency)</button>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('agentic')">🤖 Agentic AI & Tool-Calling</button>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('headlines')">📰 Recent Headlines & News Hook</button>
+              <button type="button" class="prompt-chip" onclick="applyPromptPreset('startup')">🎯 Founder / Fast Velocity</button>
+            </div>
+          </div>
+
+          <!-- Collapsible LLM Settings & API Provider -->
+          <div class="ai-settings-toggle mt-4" onclick="toggleAiSettings()">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="aiSettingsIcon">⚙️</span>
+              <strong style="font-size: 0.85rem; color: #cbd5e1;">LLM Provider & Model Settings</strong>
+              <span class="badge badge-secondary" id="activeProviderBadge" style="font-size: 0.7rem;">Gemini / Zero-Key Engine</span>
+            </div>
+            <span class="text-dim text-xs" id="aiSettingsExpandText">Show Settings ▼</span>
+          </div>
+
+          <div id="aiSettingsPanel" class="ai-settings-panel" style="display: none;">
+            <div class="ai-settings-grid">
+              <div class="meta-field">
+                <label>Provider:</label>
+                <select id="aiProviderSelect" class="input-meta" onchange="onProviderSelectChange()">
+                  <option value="gemini">Google Gemini (API Key or Built-in)</option>
+                  <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+                  <option value="anthropic">Anthropic Claude (3.5 Sonnet)</option>
+                  <option value="ollama">Local Ollama</option>
+                  <option value="builtin">Built-in Hybrid Engine (Zero-Key Web Intel)</option>
+                </select>
+              </div>
+
+              <div class="meta-field">
+                <label>Model (optional):</label>
+                <input type="text" id="aiModelInput" class="input-meta font-mono" placeholder="gemini-1.5-flash / gpt-4o-mini">
+              </div>
+
+              <div class="meta-field meta-field-grow">
+                <label style="display: flex; justify-content: space-between;">
+                  <span>API Key (Optional):</span>
+                  <span class="text-dim text-xs">Saved in local session only</span>
+                </label>
+                <input type="password" id="aiApiKeyInput" class="input-meta font-mono" placeholder="Paste Gemini / OpenAI / Claude API key or leave blank for Zero-Key engine">
+              </div>
+            </div>
+            <div class="text-dim text-xs mt-2" style="font-style: italic;">
+              💡 If no API key is provided, the system automatically uses the Built-in Zero-Key Engine to research real company headlines via web search and personalize the email.
+            </div>
+          </div>
+
+          <!-- Execution Button -->
+          <div class="mt-4">
+            <button type="button" class="btn btn-primary btn-block py-2" id="btnExecuteAiEnhance" onclick="executeAiEnhancement()" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);">
+              🚀 Research Company & Enhance Email with LLM
+            </button>
+          </div>
+
+          <!-- Loading / Live Step Indicator -->
+          <div id="aiEnhanceProgress" class="ai-progress-card mt-4" style="display: none;">
+            <div class="ai-spinner-row">
+              <div class="spinner-sm"></div>
+              <strong id="aiProgressStatusText">Researching company latest data & headlines...</strong>
+            </div>
+            <div class="ai-steps-list mt-3">
+              <div class="ai-step-item active" id="stepWebSearch">
+                <span class="step-bullet">1</span>
+                <span>Scraping company domain, products, mission & recent news headlines</span>
+              </div>
+              <div class="ai-step-item" id="stepMatchProfile">
+                <span class="step-bullet">2</span>
+                <span>Synthesizing with Yash's profile (83% latency reduction, Avion AI multi-agent RAG)</span>
+              </div>
+              <div class="ai-step-item" id="stepLlmGeneration">
+                <span class="step-bullet">3</span>
+                <span>Running LLM prompt synthesis for unique, eye-catching email & subject</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results Panel (Appears after successful generation) -->
+          <div id="aiResultsContainer" class="mt-4" style="display: none;">
+            <!-- Tabs for Intel vs Email Preview -->
+            <div class="tab-pills" style="margin-bottom: 0.75rem;">
+              <button type="button" class="btn btn-xs btn-outline active" id="btnTabAiEmail" onclick="switchAiResultTab('email')">📧 Enhanced Email Draft</button>
+              <button type="button" class="btn btn-xs btn-outline" id="btnTabAiIntel" onclick="switchAiResultTab('intel')">🏢 Company Live Intel</button>
+            </div>
+
+            <!-- Enhanced Email View -->
+            <div id="aiResultEmailView">
+              <div class="editor-section" style="margin-bottom: 0.75rem;">
+                <label class="editor-label">Generated Subject Line (Editable):</label>
+                <input type="text" id="aiResultSubject" class="input-full font-mono" style="font-weight: 600; color: #fff;">
+              </div>
+
+              <div class="editor-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                  <label class="editor-label" style="margin: 0;">Enhanced Email Content:</label>
+                  <div style="display: flex; gap: 0.25rem;">
+                    <button type="button" class="btn btn-xs btn-outline active" id="btnAiViewHtml" onclick="toggleAiBodyView('html')">Preview</button>
+                    <button type="button" class="btn btn-xs btn-outline" id="btnAiViewRaw" onclick="toggleAiBodyView('raw')">HTML Code</button>
+                  </div>
+                </div>
+
+                <div id="aiResultHtmlPreview" class="email-mockup-body" style="background: #ffffff; color: #1e293b; border-radius: var(--radius-sm); padding: 1.25rem; max-height: 280px; overflow-y: auto; border: 1px solid #cbd5e1;"></div>
+                <textarea id="aiResultRawHtml" class="editor-textarea font-mono" rows="8" style="display: none; font-size: 0.8rem;"></textarea>
+              </div>
+
+              <!-- Note / Warning Banner if any -->
+              <div id="aiResultNoteBanner" class="mt-2 text-xs text-dim" style="display: none; padding: 0.4rem 0.6rem; background: rgba(99, 102, 241, 0.1); border-left: 2px solid #6366f1; border-radius: 4px;"></div>
+            </div>
+
+            <!-- Company Intel View -->
+            <div id="aiResultIntelView" style="display: none;">
+              <div class="company-intel-card">
+                <div class="intel-block">
+                  <span class="intel-title">🏢 What the Company Does</span>
+                  <p class="intel-desc" id="intelWhatItDoes">Loading...</p>
+                </div>
+
+                <div class="intel-block">
+                  <span class="intel-title">💡 Passion & Mission</span>
+                  <p class="intel-desc" id="intelPassion">Loading...</p>
+                </div>
+
+                <div class="intel-block">
+                  <span class="intel-title">📰 Recent Headlines & Announcements (Web Search)</span>
+                  <div class="headlines-list" id="intelHeadlinesList"></div>
+                </div>
+
+                <div class="intel-block">
+                  <span class="intel-title">🚀 Recent Technical & Engineering Milestones</span>
+                  <ul class="recent-done-list" id="intelRecentDoneList"></ul>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer" style="padding: 0.85rem 1.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeAiEnhanceModal()">Cancel</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-emerald btn-sm" id="btnApplyAiEnhancedDraft" onclick="applyAiEnhancedDraftToEditor()" style="display: none; font-weight: 600;">
+              📥 Apply Enhanced Draft to Editor
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1593,6 +1593,336 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// --------------------------------------------------------------------------
+// AI Prompt & Company Intelligence Email Enhancer
+// --------------------------------------------------------------------------
+state.aiEnhancer = {
+  currentIntel: null,
+  enhancedSubject: '',
+  enhancedHtml: '',
+  enhancedText: ''
+};
+
+function openAiEnhanceModal() {
+  if (!state.selectedRecipient) {
+    if (state.outreach.recipients && state.outreach.recipients.length > 0) {
+      selectRecipientForEdit(state.outreach.recipients[0].id);
+    } else {
+      alert('Please select or add an outreach recipient first.');
+      return;
+    }
+  }
+
+  const rec = state.selectedRecipient;
+  const company = rec.company || 'Company';
+  const role = rec.role || 'Generative AI & Backend Systems Engineer';
+  const name = rec.name || 'Hiring Team';
+
+  document.getElementById('aiModalCompany').textContent = company;
+  document.getElementById('aiModalRole').textContent = role;
+  document.getElementById('aiModalRecipient').textContent = name;
+
+  const promptTextarea = document.getElementById('aiPromptText');
+  if (!promptTextarea.value || promptTextarea.dataset.lastCompany !== company) {
+    promptTextarea.dataset.lastCompany = company;
+    promptTextarea.value = `Research ${company}'s latest product launches, news headlines, mission/passion, and recent AI initiatives.
+Integrate these company findings with my candidate background (Yash Giradkar: Generative AI/LLM + Backend Engineer, 83% API latency reduction with Node.js/NestJS/FastAPI, Avion AI multi-agent RAG with 94.6% precision, AWS ECS/Fargate).
+Generate an eye-catching, unique subject line and a concise, high-converting cold email selling my specific engineering impact to their current engineering goals.`;
+  }
+
+  const savedKey = localStorage.getItem('ai_outreach_api_key');
+  if (savedKey) {
+    const keyInput = document.getElementById('aiApiKeyInput');
+    if (keyInput) keyInput.value = savedKey;
+  }
+  const savedProvider = localStorage.getItem('ai_outreach_provider');
+  if (savedProvider) {
+    const provSelect = document.getElementById('aiProviderSelect');
+    if (provSelect) provSelect.value = savedProvider;
+    onProviderSelectChange();
+  }
+
+  document.getElementById('aiEnhanceProgress').style.display = 'none';
+  document.getElementById('aiResultsContainer').style.display = 'none';
+  document.getElementById('btnApplyAiEnhancedDraft').style.display = 'none';
+
+  document.getElementById('aiEnhanceModal').classList.add('open');
+}
+
+function closeAiEnhanceModal() {
+  document.getElementById('aiEnhanceModal').classList.remove('open');
+}
+
+function applyPromptPreset(presetKey) {
+  const comp = state.selectedRecipient?.company || 'this company';
+  const promptTextarea = document.getElementById('aiPromptText');
+  if (!promptTextarea) return;
+
+  const presets = {
+    default: `Research ${comp}'s latest product launches, news headlines, mission/passion, and recent AI initiatives.
+Integrate these company findings with my candidate background (Yash Giradkar: Generative AI/LLM + Backend Engineer, 83% API latency reduction with Node.js/NestJS/FastAPI, Avion AI multi-agent RAG with 94.6% precision, AWS ECS/Fargate).
+Generate an eye-catching, unique subject line and a concise, high-converting cold email selling my specific engineering impact to their current engineering goals.`,
+
+    concise: `Research ${comp}'s core platform and most recent headline.
+Draft an ultra-concise (<120 words) executive email to the engineering hiring team.
+Lead with a 1-sentence hook showing I understand their exact product momentum, highlight 2 bullet points of my verified metrics (83% API latency reduction, Avion AI multi-agent RAG with 94.6% precision), and propose a low-friction 10-minute sync. Zero generic filler.`,
+
+    tech: `Deeply analyze ${comp}'s engineering architecture, backend scalability, and AI/GenAI tech stack.
+Emphasize my direct engineering experience: building production TypeScript/NestJS API Gateways, reducing API latency by 83% across microservices, multi-document RAG with MMR search on FAISS/AWS ECS, and resolving 70K+ corrupted records using MongoDB aggregations.
+Directly map how I can accelerate ${comp}'s immediate infrastructure and GenAI roadmap.`,
+
+    agentic: `Focus heavily on ${comp}'s interest in Autonomous AI Agents and LLM workflows.
+Highlight my hands-on build of the Avion AI Customer Support Platform: multi-tenant agentic orchestration (LangChain, LangGraph), dynamic tool selection across Search, Escalate and Resolve, and two-stage multi-model response synthesis.
+Demonstrate how I bring dependable, production-grade agentic systems to ${comp}.`,
+
+    headlines: `Search for the newest 2025/2026 press releases, news headlines, or product announcements from ${comp}.
+Open the email with a direct reference to their latest headline/achievement to immediately show authentic research.
+Seamlessly connect their recent momentum to my background as a Generative AI & Backend Engineer with proven results cutting backend latency by 83% and building high-precision RAG architectures.`,
+
+    startup: `Adopt an agile startup founder / engineering lead tone for ${comp}.
+Focus on passion, speed of shipping, and eliminating production downtime.
+Highlight building full-stack backend systems, handling messy production incidents (70K+ MongoDB record recovery), and deploying containerized microservices to AWS. Keep it fast, energetic, and compelling.`
+  };
+
+  if (presets[presetKey]) {
+    promptTextarea.value = presets[presetKey];
+    promptTextarea.focus();
+  }
+}
+
+function toggleAiSettings() {
+  const panel = document.getElementById('aiSettingsPanel');
+  const text = document.getElementById('aiSettingsExpandText');
+  const isHidden = panel.style.display === 'none';
+
+  panel.style.display = isHidden ? 'block' : 'none';
+  text.textContent = isHidden ? 'Hide Settings ▲' : 'Show Settings ▼';
+}
+
+function onProviderSelectChange() {
+  const prov = document.getElementById('aiProviderSelect').value;
+  const badge = document.getElementById('activeProviderBadge');
+  const modelInput = document.getElementById('aiModelInput');
+
+  localStorage.setItem('ai_outreach_provider', prov);
+
+  if (prov === 'gemini') {
+    badge.textContent = 'Google Gemini';
+    modelInput.placeholder = 'gemini-1.5-flash (default)';
+  } else if (prov === 'openai') {
+    badge.textContent = 'OpenAI';
+    modelInput.placeholder = 'gpt-4o-mini (default)';
+  } else if (prov === 'anthropic') {
+    badge.textContent = 'Claude';
+    modelInput.placeholder = 'claude-3-5-sonnet (default)';
+  } else if (prov === 'ollama') {
+    badge.textContent = 'Local Ollama';
+    modelInput.placeholder = 'llama3.2 (default)';
+  } else {
+    badge.textContent = 'Built-in Zero-Key Engine';
+    modelInput.placeholder = 'Built-in Heuristic Generator';
+  }
+}
+
+async function executeAiEnhancement() {
+  const rec = state.selectedRecipient;
+  if (!rec) {
+    alert('Please select a recipient first.');
+    return;
+  }
+
+  const prompt = document.getElementById('aiPromptText')?.value?.trim();
+  const provider = document.getElementById('aiProviderSelect')?.value || 'gemini';
+  const model = document.getElementById('aiModelInput')?.value?.trim();
+  const apiKey = document.getElementById('aiApiKeyInput')?.value?.trim();
+
+  if (apiKey) {
+    localStorage.setItem('ai_outreach_api_key', apiKey);
+  }
+
+  const progress = document.getElementById('aiEnhanceProgress');
+  const resultsContainer = document.getElementById('aiResultsContainer');
+  const btnExecute = document.getElementById('btnExecuteAiEnhance');
+  const stepWeb = document.getElementById('stepWebSearch');
+  const stepMatch = document.getElementById('stepMatchProfile');
+  const stepLlm = document.getElementById('stepLlmGeneration');
+  const statusText = document.getElementById('aiProgressStatusText');
+
+  progress.style.display = 'block';
+  resultsContainer.style.display = 'none';
+  document.getElementById('btnApplyAiEnhancedDraft').style.display = 'none';
+  btnExecute.disabled = true;
+  btnExecute.innerHTML = '<span class="spinner-sm" style="display:inline-block; vertical-align:middle; margin-right:6px;"></span> Researching & Synthesizing...';
+
+  stepWeb.className = 'ai-step-item active';
+  stepMatch.className = 'ai-step-item';
+  stepLlm.className = 'ai-step-item';
+  statusText.textContent = `Scraping ${rec.company}'s latest products, headlines & passion...`;
+
+  const stepTimer1 = setTimeout(() => {
+    stepWeb.className = 'ai-step-item completed';
+    stepMatch.className = 'ai-step-item active';
+    statusText.textContent = `Aligning company momentum with Yash's verified achievements (83% latency, Avion AI RAG)...`;
+  }, 1200);
+
+  const stepTimer2 = setTimeout(() => {
+    stepMatch.className = 'ai-step-item completed';
+    stepLlm.className = 'ai-step-item active';
+    statusText.textContent = `Executing LLM prompt synthesis for high-conversion email...`;
+  }, 2400);
+
+  try {
+    const res = await fetch('/api/outreach/enhance-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: rec.id,
+        company: rec.company,
+        role: rec.role,
+        recipientName: rec.name,
+        link: rec.link,
+        prompt,
+        provider,
+        apiKey,
+        model
+      })
+    });
+
+    clearTimeout(stepTimer1);
+    clearTimeout(stepTimer2);
+
+    const json = await res.json();
+    if (!json.success) {
+      throw new Error(json.error || 'Failed to enhance email');
+    }
+
+    stepWeb.className = 'ai-step-item completed';
+    stepMatch.className = 'ai-step-item completed';
+    stepLlm.className = 'ai-step-item completed';
+    statusText.textContent = '✨ Complete! High-converting personalized email generated.';
+
+    state.aiEnhancer.currentIntel = json.companyIntel;
+    state.aiEnhancer.enhancedSubject = json.subject;
+    state.aiEnhancer.enhancedHtml = json.html;
+    state.aiEnhancer.enhancedText = json.text;
+
+    document.getElementById('aiResultSubject').value = json.subject || '';
+    document.getElementById('aiResultHtmlPreview').innerHTML = json.html || '';
+    document.getElementById('aiResultRawHtml').value = json.html || '';
+
+    const noteBanner = document.getElementById('aiResultNoteBanner');
+    if (json.warning || json.note) {
+      noteBanner.style.display = 'block';
+      noteBanner.textContent = json.warning || json.note;
+    } else {
+      noteBanner.style.display = 'none';
+    }
+
+    const intel = json.companyIntel || {};
+    document.getElementById('intelWhatItDoes').textContent = intel.whatItDoes || `${rec.company} builds modern technology products.`;
+    document.getElementById('intelPassion').textContent = intel.passion || `Focusing on engineering excellence, reliability and scalable systems.`;
+
+    const headlinesEl = document.getElementById('intelHeadlinesList');
+    headlinesEl.innerHTML = '';
+    if (intel.headlines && intel.headlines.length > 0) {
+      intel.headlines.forEach(h => {
+        const div = document.createElement('div');
+        div.className = 'headline-item';
+        div.innerHTML = `
+          <a href="${escapeHtml(h.link)}" target="_blank" class="headline-link">📰 ${escapeHtml(h.title)}</a>
+          <span class="headline-snippet">${escapeHtml(h.snippet)}</span>
+        `;
+        headlinesEl.appendChild(div);
+      });
+    } else {
+      headlinesEl.innerHTML = '<span class="text-dim text-xs">No recent news headlines returned by search.</span>';
+    }
+
+    const recentDoneEl = document.getElementById('intelRecentDoneList');
+    recentDoneEl.innerHTML = '';
+    if (intel.recentDone && intel.recentDone.length > 0) {
+      intel.recentDone.forEach(d => {
+        const li = document.createElement('li');
+        li.textContent = d;
+        recentDoneEl.appendChild(li);
+      });
+    } else {
+      recentDoneEl.innerHTML = '<li>Continuous backend optimization and scalable product launches.</li>';
+    }
+
+    setTimeout(() => {
+      progress.style.display = 'none';
+      resultsContainer.style.display = 'block';
+      document.getElementById('btnApplyAiEnhancedDraft').style.display = 'inline-flex';
+      switchAiResultTab('email');
+    }, 600);
+
+  } catch (err) {
+    clearTimeout(stepTimer1);
+    clearTimeout(stepTimer2);
+    progress.style.display = 'none';
+    alert(`Enhancement Error: ${err.message}`);
+  } finally {
+    btnExecute.disabled = false;
+    btnExecute.innerHTML = '🚀 Research Company & Enhance Email with LLM';
+  }
+}
+
+function switchAiResultTab(tab) {
+  document.getElementById('btnTabAiEmail').classList.toggle('active', tab === 'email');
+  document.getElementById('btnTabAiIntel').classList.toggle('active', tab === 'intel');
+  document.getElementById('aiResultEmailView').style.display = tab === 'email' ? 'block' : 'none';
+  document.getElementById('aiResultIntelView').style.display = tab === 'intel' ? 'block' : 'none';
+}
+
+function toggleAiBodyView(view) {
+  const isHtml = view === 'html';
+  document.getElementById('btnAiViewHtml').classList.toggle('active', isHtml);
+  document.getElementById('btnAiViewRaw').classList.toggle('active', !isHtml);
+  document.getElementById('aiResultHtmlPreview').style.display = isHtml ? 'block' : 'none';
+  document.getElementById('aiResultRawHtml').style.display = !isHtml ? 'block' : 'none';
+
+  if (!isHtml) {
+    document.getElementById('aiResultRawHtml').value = document.getElementById('aiResultHtmlPreview').innerHTML;
+  } else {
+    document.getElementById('aiResultHtmlPreview').innerHTML = document.getElementById('aiResultRawHtml').value;
+  }
+}
+
+function applyAiEnhancedDraftToEditor() {
+  const subjectInput = document.getElementById('aiResultSubject');
+  const subject = subjectInput ? subjectInput.value : state.aiEnhancer.enhancedSubject;
+  const rawHtmlTextarea = document.getElementById('aiResultRawHtml');
+  const htmlPreview = document.getElementById('aiResultHtmlPreview');
+  const html = rawHtmlTextarea && rawHtmlTextarea.style.display !== 'none' 
+    ? rawHtmlTextarea.value 
+    : (htmlPreview?.innerHTML || state.aiEnhancer.enhancedHtml);
+
+  const editSub = document.getElementById('editSubject');
+  const editBody = document.getElementById('editEmailBody');
+  if (editSub) editSub.value = subject;
+  if (editBody) editBody.value = html;
+
+  if (state.selectedRecipient) {
+    state.selectedRecipient.customSubject = subject;
+    state.selectedRecipient.customBody = html;
+    state.selectedRecipient.status = 'previewed';
+  }
+
+  updateMockupFromEditor();
+
+  const btnMark = document.getElementById('btnMarkReady');
+  if (btnMark) {
+    btnMark.textContent = '✓ Previewed (Click to Set Ready)';
+    btnMark.className = 'btn btn-sm btn-outline';
+  }
+
+  closeAiEnhanceModal();
+  renderOutreachTable(state.outreach.recipients || []);
+
+  alert('✨ AI Enhanced Email draft applied to your editor! You can review or edit further before saving or sending.');
+}
+
 window.launchWorkflow = launchWorkflow;
 window.openJobDrawer = openJobDrawer;
 window.updateJobStatus = updateJobStatus;
@@ -1614,3 +1944,13 @@ window.confirmBatchSend = confirmBatchSend;
 window.toggleSelectAllRecipients = toggleSelectAllRecipients;
 window.toggleSelectRecipient = toggleSelectRecipient;
 window.filterOutreachRecipients = filterOutreachRecipients;
+window.openAiEnhanceModal = openAiEnhanceModal;
+window.closeAiEnhanceModal = closeAiEnhanceModal;
+window.applyPromptPreset = applyPromptPreset;
+window.toggleAiSettings = toggleAiSettings;
+window.onProviderSelectChange = onProviderSelectChange;
+window.executeAiEnhancement = executeAiEnhancement;
+window.switchAiResultTab = switchAiResultTab;
+window.toggleAiBodyView = toggleAiBodyView;
+window.applyAiEnhancedDraftToEditor = applyAiEnhancedDraftToEditor;
+

@@ -312,6 +312,8 @@ All endpoints are served by `src/server.js` on `http://localhost:3000`.
 | `POST` | `/api/outreach/populate-startups` | Auto-populate queue from Google Sheet of agentic AI startups |
 | `POST` | `/api/outreach/preview` | Generate and preview personalized email HTML for a recipient |
 | `POST` | `/api/outreach/verify-attachment` | Verify the resume PDF attachment path exists on disk |
+| `POST` | `/api/outreach/enhance-email` | LLM + web intelligence email personalization with custom prompt |
+| `POST` | `/api/outreach/company-intel` | Live web search for company products, headlines, passion & milestones |
 | `POST` | `/api/outreach/send-test` | Send a preview to sender's own address (not logged to MongoDB) |
 | `POST` | `/api/outreach/send-single` | Dispatch a single production email; MongoDB log written only on confirmed SMTP delivery |
 | `POST` | `/api/outreach/send-batch` | Dispatch the full approved batch with per-email jitter delays |
