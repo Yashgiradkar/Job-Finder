@@ -1263,6 +1263,11 @@ function renderBatchModal() {
             ? '<span class="badge badge-emerald">✓ Verified</span>' 
             : '<span class="badge badge-rose">⚠️ Email Required</span>'}
         </td>
+        <td style="text-align: right;">
+          <button type="button" class="btn btn-xs btn-outline btn-rose" onclick="removeRecipientFromBatch(${idx})" title="Remove ${escapeHtml(t.company)} from this dispatch batch">
+            ✕ Remove
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
@@ -1279,7 +1284,7 @@ function renderBatchModal() {
   if (invalidCount > 0) {
     warningBox.style.display = 'flex';
     document.getElementById('batchWarningText').textContent = 
-      `${invalidCount} recipient(s) have missing or placeholder emails. Enterprise rules require real corporate emails for all batch items. Please enter valid emails in the table above before dispatching.`;
+      `${invalidCount} recipient(s) have missing or placeholder emails. Enterprise rules require real corporate emails for all batch items. Click "Remove All Invalid" or enter valid emails above before dispatching.`;
     btnExecute.disabled = true;
     btnExecute.style.opacity = '0.5';
     btnExecute.style.cursor = 'not-allowed';
@@ -1300,6 +1305,41 @@ function updateBatchRecipientEmail(index, newEmail) {
     if (qItem) qItem.email = newEmail.trim();
     renderBatchModal();
     renderOutreachTable(state.outreach.recipients || []);
+  }
+}
+
+function removeRecipientFromBatch(index) {
+  if (!state.activeBatchTargets || index < 0 || index >= state.activeBatchTargets.length) return;
+  const removed = state.activeBatchTargets.splice(index, 1)[0];
+  if (removed && removed.id) {
+    state.selectedRecipientIds.delete(removed.id);
+  }
+  if (state.activeBatchTargets.length === 0) {
+    closeBatchDispatchModal();
+  } else {
+    renderBatchModal();
+  }
+}
+
+function removeInvalidRecipientsFromBatch() {
+  if (!state.activeBatchTargets) return;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const beforeCount = state.activeBatchTargets.length;
+  state.activeBatchTargets = state.activeBatchTargets.filter(t => {
+    const email = (t.email || '').trim().toLowerCase();
+    const isFake = email.endsWith('@example.com') || email.endsWith('@placeholder.com') || email.endsWith('@test.com');
+    const isValid = email && emailRegex.test(email) && !isFake;
+    if (!isValid && t.id) {
+      state.selectedRecipientIds.delete(t.id);
+    }
+    return isValid;
+  });
+  const removedCount = beforeCount - state.activeBatchTargets.length;
+  if (state.activeBatchTargets.length === 0) {
+    alert(`Removed ${removedCount} recipient(s) with invalid or missing emails. No valid recipients remaining in batch.`);
+    closeBatchDispatchModal();
+  } else {
+    renderBatchModal();
   }
 }
 
@@ -2059,5 +2099,7 @@ window.applyAiEnhancedDraftToEditor = applyAiEnhancedDraftToEditor;
 window.setOutreachFilter = setOutreachFilter;
 window.toggleSenderConfigDrawer = toggleSenderConfigDrawer;
 window.openAiEnhanceWithPreset = openAiEnhanceWithPreset;
+window.removeRecipientFromBatch = removeRecipientFromBatch;
+window.removeInvalidRecipientsFromBatch = removeInvalidRecipientsFromBatch;
 
 

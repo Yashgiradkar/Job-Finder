@@ -394,10 +394,6 @@
                   <span class="pill-meta" id="mongoPillCounts">(<strong id="mongoLogsCount">0</strong> sent · <strong id="mongoContactsCount">0</strong> enriched)</span>
                   <button class="btn-icon-subtle" onclick="loadMongoLogsAndContacts()" title="Refresh MongoDB Records">🔄</button>
                 </div>
-                <div class="status-pill status-pill-safe" title="Zero automated emails sent. Human preview and approval required for every dispatch.">
-                  <span class="shield-icon">🛡️</span>
-                  <span>Safe Mode Active</span>
-                </div>
               </div>
 
               <!-- Primary Action Controls -->
@@ -523,50 +519,6 @@
                   </div>
                 </div>
 
-                <!-- Expandable Sender & Attachment Drawer Toggle -->
-                <div class="sender-drawer-toggle" onclick="toggleSenderConfigDrawer()">
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span>⚙️</span>
-                    <span style="font-size: 0.75rem; color: #cbd5e1;">From: <strong id="senderSummaryText">Yash Giradkar (yashgiradkar02@gmail.com)</strong></span>
-                    <span id="attachmentStatusBadge" class="badge badge-emerald badge-xs">📎 Resume Verified (112 KB)</span>
-                  </div>
-                  <span class="text-dim text-xs" id="senderDrawerToggleText">Configure Sender ▼</span>
-                </div>
-
-                <!-- Collapsible Sender Configuration Details -->
-                <div id="senderConfigDrawer" class="sender-config-drawer" style="display: none;">
-                  <div class="editor-sender-bar">
-                    <div class="meta-field">
-                      <label>Sender Name:</label>
-                      <input type="text" id="editSenderName" class="input-meta" value="Yash Giradkar" placeholder="Your Name" oninput="onSenderFieldChange()">
-                    </div>
-                    <div class="meta-field">
-                      <label>Sender Email (SMTP):</label>
-                      <input type="email" id="editSenderEmail" class="input-meta" value="yashgiradkar02@gmail.com" placeholder="your@email.com" oninput="onSenderFieldChange()">
-                    </div>
-                    <div class="meta-field meta-field-grow">
-                      <label>Resume / Attachment Path:</label>
-                      <input type="text" id="editAttachmentPath" class="input-meta font-mono" value="./Yash_Giradkar_Resume.pdf" placeholder="./Yash_Giradkar_Resume.pdf" oninput="onAttachmentPathChange()">
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- AI Copilot Quick Personalize Strip -->
-              <div class="studio-copilot-banner" onclick="openAiEnhanceModal()">
-                <div class="copilot-left">
-                  <span class="copilot-sparkle">✨</span>
-                  <div class="copilot-text">
-                    <strong>AI Copilot & Company Intel:</strong>
-                    <span>Auto-incorporate latest headlines, what they do, passion & your 83% latency reduction.</span>
-                  </div>
-                </div>
-                <div class="copilot-actions">
-                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('concise')">⚡ 120w Exec</button>
-                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('tech')">🚀 RAG & Latency</button>
-                  <button type="button" class="copilot-chip" onclick="event.stopPropagation(); openAiEnhanceWithPreset('agentic')">🤖 Agentic AI</button>
-                  <button type="button" class="btn btn-xs btn-primary">Open AI Enhancer</button>
-                </div>
               </div>
 
               <!-- Subject Line Bar with Tokens -->
@@ -908,7 +860,12 @@
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.25rem 0 0.5rem 0;">
-            <h4 style="font-size: 0.875rem; color: #fff;">Batch Queue Preview:</h4>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <h4 style="font-size: 0.875rem; color: #fff;">Batch Queue Preview:</h4>
+              <button type="button" class="btn btn-xs btn-outline btn-rose" onclick="removeInvalidRecipientsFromBatch()" title="Instantly remove companies with missing or placeholder emails from this batch">
+                🗑️ Remove All Invalid
+              </button>
+            </div>
             <span class="text-dim text-xs">All fields reflect your live UI edits</span>
           </div>
           
@@ -921,6 +878,7 @@
                   <th>Contact</th>
                   <th>To Email (Live)</th>
                   <th>Status</th>
+                  <th style="text-align: right; width: 85px;">Action</th>
                 </tr>
               </thead>
               <tbody id="batchModalTableBody">

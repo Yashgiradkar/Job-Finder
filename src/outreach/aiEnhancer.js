@@ -317,48 +317,33 @@ function generateWithBuiltin({ company, role, recipientName, companyIntel, userP
   const subject = `${candidateProfile.name} — ${roleDisplay} at ${companyName} (${candidateProfile.positioning})`;
 
   const html = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; line-height: 1.6; color: #1e293b; max-width: 590px; margin: 0 auto; padding: 4px;">
-  <p style="margin-bottom: 12px; font-size: 15px;">Hi ${firstName},</p>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; line-height: 1.6; color: #111827; max-width: 580px; margin: 0 auto; padding: 4px;">
+  <p style="margin-bottom: 14px;">Hi ${firstName},</p>
 
-  <p style="margin-bottom: 12px;">
-    I've been closely following <b>${companyName}</b> — ${newsHook}. What stands out most about ${companyName} is how your team is ${whatItDoesSnippet}
+  <p style="margin-bottom: 14px;">
+    I've been closely following ${companyName} — ${newsHook}. What stands out most about ${companyName} is how your team is ${whatItDoesSnippet}
   </p>
 
   <p style="margin-bottom: 14px;">
-    While many engineers work primarily on simple wrapper scripts, my focus over the last <b>2–4 years</b> has centered on high-throughput backend architecture and deterministic Generative AI systems built for production reliability.
+    Over the past 2–4 years, my focus has been on high-throughput backend infrastructure and production Generative AI systems. A few key highlights of what I've delivered:
   </p>
 
-  <div style="background: #f8fafc; border-left: 3px solid #6366f1; border-radius: 6px; padding: 14px 18px; margin: 16px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-    <p style="margin: 0 0 8px 0; font-weight: 700; color: #0f172a; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">
-      Direct Value I Can Deliver to ${companyName}'s Engineering:
-    </p>
-    <ul style="margin: 0; padding-left: 18px; color: #334155; font-size: 14px;">
-      <li style="margin-bottom: 8px;">
-        <b>Production Agentic AI & RAG:</b> Designed multi-tenant autonomous AI support agents (LangChain, LangGraph) with dynamic tool-calling and hybrid retrieval achieving <b>94.6% Precision@5</b> (Avion AI Support Platform).
-      </li>
-      <li style="margin-bottom: 8px;">
-        <b>High-Concurrency Backends & Latency:</b> Built TypeScript/NestJS API Gateways and Python/FastAPI microservices that reduced production API response latency by <b>83%</b>.
-      </li>
-      <li style="margin-bottom: 0;">
-        <b>Scalable Data & Infrastructure:</b> Repaired 70K+ corrupted records using complex MongoDB aggregations during a high-stakes incident; automated containerized deployments via Docker and AWS ECS Fargate CI/CD.
-      </li>
-    </ul>
-  </div>
+  <p style="margin-bottom: 8px;">&bull; <b>Agentic AI & RAG:</b> Multi-agent orchestration (LangChain, LangGraph), dynamic tool-calling, and hybrid vector retrieval achieving <b>94.6% Precision@5</b> (Avion AI Support Platform).</p>
+  <p style="margin-bottom: 8px;">&bull; <b>High-Concurrency Backend:</b> Node.js, TypeScript, NestJS API Gateways and Python/FastAPI microservices (reduced production API latency by <b>83%</b>).</p>
+  <p style="margin-bottom: 14px;">&bull; <b>Production Infrastructure:</b> Scalable MongoDB aggregations (repaired 70K+ records during an incident), PostgreSQL, Redis caching, Docker, and automated AWS (ECS/Fargate) CI/CD.</p>
 
   <p style="margin-bottom: 14px;">
-    I have attached my resume for your review. Would you or an engineering manager on the team have <b>10 minutes this week</b> for a brief introductory sync?
+    I have attached my resume for your review. Would you or an engineering manager on the team have 10 minutes this week for a brief introductory sync?
   </p>
 
-  <p style="margin-top: 18px; color: #475569; border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 13.5px;">
+  <p style="margin-top: 20px; font-size: 14px; color: #374151;">
     Best regards,<br>
-    <strong style="color: #0f172a; font-size: 15px;">${candidateProfile.name}</strong><br>
-    <span style="font-size: 13px; color: #64748b;">${candidateProfile.positioning}</span><br>
-    <span style="font-size: 12.5px; margin-top: 6px; display: inline-block;">
-      <a href="${candidateProfile.portfolio}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">🌐 Portfolio</a> &bull; 
-      <a href="${candidateProfile.linkedin}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">💼 LinkedIn</a> &bull; 
-      <a href="${candidateProfile.github}" style="color: #4f46e5; text-decoration: none; font-weight: 500;">🐙 GitHub</a>
-      ${candidateProfile.phone ? ` &bull; <span style="color: #334155;">📞 ${candidateProfile.phone}</span>` : ''}
-    </span>
+    <strong style="color: #111827;">${candidateProfile.name}</strong><br>
+    Generative AI & Backend Systems Engineer<br>
+    <a href="${candidateProfile.portfolio}" style="color: #2563eb; text-decoration: none;">Portfolio</a> &bull; 
+    <a href="${candidateProfile.linkedin}" style="color: #2563eb; text-decoration: none;">LinkedIn</a> &bull; 
+    <a href="${candidateProfile.github}" style="color: #2563eb; text-decoration: none;">GitHub</a>
+    ${candidateProfile.phone ? ` &bull; ${candidateProfile.phone}` : ''}
   </p>
 </div>
 `;
@@ -367,12 +352,11 @@ function generateWithBuiltin({ company, role, recipientName, companyIntel, userP
 
 I've been closely following ${companyName} — ${newsHook.replace(/<[^>]+>/g, '')}. What stands out most about ${companyName} is how your team is ${whatItDoesSnippet}
 
-While many engineers work primarily on simple wrapper scripts, my focus over the last 2–4 years has centered on high-throughput backend architecture and deterministic Generative AI systems built for production reliability.
+Over the past 2–4 years, my focus has been on high-throughput backend infrastructure and production Generative AI systems. A few key highlights of what I've delivered:
 
-Direct Value I Can Deliver to ${companyName}'s Engineering:
-• Production Agentic AI & RAG: Designed multi-tenant autonomous AI support agents (LangChain, LangGraph) with dynamic tool-calling and hybrid retrieval achieving 94.6% Precision@5 (Avion AI Support Platform).
-• High-Concurrency Backends & Latency: Built TypeScript/NestJS API Gateways and Python/FastAPI microservices that reduced production API response latency by 83%.
-• Scalable Data & Infrastructure: Repaired 70K+ corrupted records using complex MongoDB aggregations during a high-stakes incident; automated containerized deployments via Docker and AWS ECS Fargate CI/CD.
+• Agentic AI & RAG: Multi-agent orchestration (LangChain, LangGraph), dynamic tool-calling, and hybrid vector retrieval achieving 94.6% Precision@5 (Avion AI Support Platform).
+• High-Concurrency Backend: Node.js, TypeScript, NestJS API Gateways and Python/FastAPI microservices (reduced production API latency by 83%).
+• Production Infrastructure: Scalable MongoDB aggregations (repaired 70K+ records during an incident), PostgreSQL, Redis caching, Docker, and automated AWS (ECS/Fargate) CI/CD.
 
 I have attached my resume for your review. Would you or an engineering manager on the team have 10 minutes this week for a brief introductory sync?
 
