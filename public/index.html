@@ -407,6 +407,9 @@
                 <button class="btn btn-sm btn-ghost" id="btnAddRecipient" onclick="openAddRecipientModal()" title="Add custom company recipient">
                   ➕ Add
                 </button>
+                <button class="btn btn-sm btn-ghost" id="btnViewScheduled" onclick="openScheduledEmailsModal()" title="View and manage scheduled Tuesday emails">
+                  📅 Scheduled (<span id="scheduledJobsCount">0</span>)
+                </button>
                 <button class="btn btn-sm btn-primary btn-glow" id="btnSendBatchApproved" onclick="confirmBatchSend()">
                   🚀 Send Approved Batch (<span id="approvedCountDisplayBtn">0</span>)
                 </button>
@@ -519,6 +522,22 @@
                   </div>
                 </div>
 
+              </div>
+
+              <!-- Top 3 Hiring Managers & LinkedIn Contacts Card -->
+              <div class="hiring-managers-card" id="hiringManagersContainer" style="margin: 0.75rem 0; padding: 0.75rem 0.85rem; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-sm);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.82rem; font-weight: 600; color: #fff;">👥 Hiring Managers &amp; LinkedIn Contacts (Top 3)</span>
+                    <span class="badge badge-indigo badge-xs" id="hiringCompanyBadge">Company</span>
+                  </div>
+                  <button type="button" class="btn btn-xs btn-outline" onclick="refreshSelectedCompanyLinkedInContacts()" title="Re-query live LinkedIn contacts for this company">
+                    🔄 Live Search
+                  </button>
+                </div>
+                <div id="hiringManagersList" class="hiring-managers-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.5rem;">
+                  <!-- Populated dynamically -->
+                </div>
               </div>
 
               <!-- Subject Line Bar with Tokens -->
@@ -859,6 +878,33 @@
             </div>
           </div>
 
+          <!-- Timezone & Morning Day/Time Scheduler Controls -->
+          <div class="scheduler-settings-bar" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); margin: 1rem 0 0.5rem 0;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 0.82rem; font-weight: 600; color: #e2e8f0;">🗓️ Target Morning:</span>
+              <select id="batchScheduleDaySelect" class="form-input form-input-sm" style="width: auto; padding: 0.25rem 0.65rem; background: #0f172a; border-color: rgba(99,102,241,0.4); color: #fff;" onchange="onBatchScheduleConfigChange()">
+                <option value="2" selected>Tuesday Morning (Recommended)</option>
+                <option value="3">Wednesday Morning</option>
+                <option value="4">Thursday Morning</option>
+                <option value="1">Monday Morning</option>
+                <option value="5">Friday Morning</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 0.82rem; font-weight: 600; color: #e2e8f0;">⏰ Morning Time (Local):</span>
+              <select id="batchScheduleHourSelect" class="form-input form-input-sm" style="width: auto; padding: 0.25rem 0.65rem; background: #0f172a; border-color: rgba(99,102,241,0.4); color: #fff;" onchange="onBatchScheduleConfigChange()">
+                <option value="8">08:00 AM</option>
+                <option value="9" selected>09:00 AM (Recommended)</option>
+                <option value="10">10:00 AM</option>
+                <option value="11">11:00 AM</option>
+                <option value="12">12:00 PM (Noon)</option>
+              </select>
+            </div>
+            <div class="text-xs text-dim" style="display: flex; align-items: center; gap: 0.35rem;">
+              <span class="badge badge-indigo">Auto Local Timezone</span>
+            </div>
+          </div>
+
           <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.25rem 0 0.5rem 0;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <h4 style="font-size: 0.875rem; color: #fff;">Batch Queue Preview:</h4>
@@ -875,8 +921,9 @@
                 <tr>
                   <th style="width: 30px;">#</th>
                   <th>Company</th>
-                  <th>Contact</th>
+                  <th>Hiring Managers (3 LinkedIn IDs)</th>
                   <th>To Email (Live)</th>
+                  <th id="batchModalSlotHeader">Local Timezone &amp; Slot</th>
                   <th>Status</th>
                   <th style="text-align: right; width: 85px;">Action</th>
                 </tr>
@@ -888,14 +935,19 @@
           </div>
 
           <div style="margin-top: 1.25rem; padding: 0.85rem; background: rgba(0, 0, 0, 0.3); border-radius: var(--radius-sm); font-size: 0.8rem; color: #94a3b8;">
-            🛡️ <strong>Production Safeguards:</strong> 15-second jitter delay between dispatches automatically enforced. Real-time delivery progress streams to the Autonomous Terminal. Zero automated sending without this preview approval.
+            🛡️ <strong>Production Safeguards:</strong> Real-time delivery progress streams to the Autonomous Terminal. Choose between scheduling for morning in recipient's local timezone (Tue/Wed/Thu) or immediate sequential dispatch with rate-limiting.
           </div>
         </div>
-        <div class="modal-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <div class="modal-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
           <button type="button" class="btn btn-secondary btn-sm" onclick="closeBatchDispatchModal()">Cancel</button>
-          <button type="button" class="btn btn-emerald btn-sm" id="btnExecuteBatchDispatch" onclick="executeBatchDispatch()">
-            Confirm & Dispatch Production Batch
-          </button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" class="btn btn-primary btn-sm btn-glow" id="btnScheduleTuesdayBatch" onclick="executeScheduleTuesdayBatch()" title="Schedule all emails across company local timezones">
+              📅 Schedule Tuesday 9 AM (Local Timezones)
+            </button>
+            <button type="button" class="btn btn-emerald btn-sm" id="btnExecuteBatchDispatch" onclick="executeBatchDispatch()" title="Send immediately with 15s rate-limiting">
+              🚀 Send Now (Immediate)
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1125,6 +1177,57 @@
               📥 Apply Enhanced Draft to Editor
             </button>
           </div>
+        </div>
+      </div>
+    <!-- Scheduled Emails Management Modal -->
+    <div class="modal-overlay" id="scheduledEmailsModal">
+      <div class="modal-content" style="max-width: 960px; max-height: 90vh;">
+        <div class="modal-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">📅</span>
+              <h3 class="modal-title">Scheduled Tuesday Morning Outreach</h3>
+            </div>
+            <span class="modal-subtitle">Emails queued to deliver at 9:00 AM Tuesday in each company's local timezone</span>
+          </div>
+          <button class="btn-icon" onclick="closeScheduledEmailsModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="font-size: 0.85rem; color: #94a3b8;">
+              Active Jobs: <span id="scheduledModalCount" class="font-mono text-emerald" style="font-weight: 700;">0</span> scheduled email(s) in MongoDB
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-xs btn-outline" onclick="loadScheduledEmails()">🔄 Refresh</button>
+              <button class="btn btn-xs btn-outline btn-rose" onclick="cancelAllScheduledEmails()">🛑 Cancel All</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Contact</th>
+                  <th>To Email</th>
+                  <th>Timezone</th>
+                  <th>Scheduled Local Time</th>
+                  <th>Countdown</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="scheduledModalTableBody">
+                <tr><td colspan="8" class="text-center py-6 text-muted">Loading scheduled emails...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-sm); font-size: 0.8rem; color: #93c5fd; display: flex; align-items: center; gap: 0.5rem;">
+            <span>💡</span>
+            <span><strong>Smart Timezone Dispatch:</strong> The backend scheduler runs continuously. Once the local time for a company's headquarters reaches 9:00 AM on Tuesday, the email is automatically sent via your authenticated SMTP with attachments and saved to MongoDB.</span>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 0.85rem 1.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeScheduledEmailsModal()">Close</button>
         </div>
       </div>
     </div>

@@ -636,6 +636,17 @@ function renderOutreachTable(recipients) {
                 ${escapeHtml(r.name || 'Hiring Team')} &bull; 
                 ${r.email ? `<span class="font-mono text-dim">${escapeHtml(r.email)}</span>` : '<span class="text-rose text-xs" style="font-weight:600;">⚠️ Missing Email</span>'}
               </span>
+              <div class="recipient-linkedin-row" style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                ${(r.linkedinContacts || []).slice(0, 3).map(c => {
+                  const lid = c.linkedinId || (c.linkedinUrl ? c.linkedinUrl.split('/in/').pop()?.split('?')[0]?.replace(/\/$/, '') : 'hiring-manager');
+                  const lUrl = c.linkedinUrl || `https://www.linkedin.com/in/${lid}`;
+                  return `
+                    <a href="${lUrl}" target="_blank" rel="noopener noreferrer" class="linkedin-chip" onclick="event.stopPropagation();" title="${escapeHtml(c.title || 'Hiring Manager')}: ${escapeHtml(c.name || '')}">
+                      👔 in/${escapeHtml(lid)}
+                    </a>
+                  `;
+                }).join('')}
+              </div>
             </div>
           </div>
         </td>
@@ -743,6 +754,11 @@ async function selectRecipientForEdit(id) {
   document.getElementById('editEmail').value = rec.email || '';
   document.getElementById('editRole').value = rec.role || '';
 
+  // Render Hiring Managers & LinkedIn Contacts Card
+  const hiringBadge = document.getElementById('hiringCompanyBadge');
+  if (hiringBadge) hiringBadge.textContent = rec.company || 'Company';
+  renderHiringManagersForRecipient(rec);
+
   // Update sender summary text
   const senderSummary = document.getElementById('senderSummaryText');
   if (senderSummary) {
@@ -785,6 +801,97 @@ async function selectRecipientForEdit(id) {
 
   // Re-render table to highlight active row
   filterOutreachRecipients();
+}
+
+// --------------------------------------------------------------------------
+// Hiring Managers & LinkedIn Profile IDs Display (Top 3 per Company)
+// --------------------------------------------------------------------------
+function renderHiringManagersForRecipient(rec) {
+  const container = document.getElementById('hiringManagersList');
+  if (!container) return;
+
+  const contacts = rec.linkedinContacts || [];
+  if (contacts.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 0.5rem; text-align: center; color: #94a3b8; font-size: 0.75rem;">
+        No hiring managers loaded yet. 
+        <button type="button" class="btn btn-xs btn-outline" style="margin-left: 0.5rem;" onclick="refreshSelectedCompanyLinkedInContacts()">
+          🔍 Fetch 3 LinkedIn IDs
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = contacts.slice(0, 3).map((c, i) => {
+    const lid = c.linkedinId || (c.linkedinUrl ? c.linkedinUrl.split('/in/').pop()?.split('?')[0]?.replace(/\/$/, '') : 'hiring-manager');
+    const linkedinUrl = c.linkedinUrl || `https://www.linkedin.com/in/${lid}`;
+    return `
+      <div class="hiring-card-item">
+        <div class="hiring-card-header">
+          <div>
+            <div class="hiring-card-name">${escapeHtml(c.name || 'Hiring Manager')}</div>
+            <div class="hiring-card-title">${escapeHtml(c.title || 'Engineering / Talent')}</div>
+          </div>
+          <span class="badge badge-xs badge-indigo">#${i + 1}</span>
+        </div>
+        <div style="margin: 0.2rem 0;">
+          <a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer" class="linkedin-chip" title="Click to view LinkedIn Profile (${escapeHtml(lid)})">
+            👔 in/${escapeHtml(lid)} ↗
+          </a>
+        </div>
+        <div class="text-xs font-mono text-dim" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          ${escapeHtml(c.email || 'hiring@company.com')}
+        </div>
+        <div class="hiring-card-actions">
+          <button type="button" class="btn btn-xs btn-outline" style="font-size: 0.68rem; padding: 0.15rem 0.4rem;" 
+                  onclick="applyHiringManagerToComposer('${escapeHtml(c.name || '')}', '${escapeHtml(c.email || '')}')" 
+                  title="Auto-fill this hiring manager as To contact and email in composer">
+            ✉️ Set as Recipient
+          </button>
+          <a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer" class="text-xs" style="color: #60a5fa; text-decoration: underline;">
+            LinkedIn ↗
+          </a>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function applyHiringManagerToComposer(name, email) {
+  if (name) document.getElementById('editName').value = name;
+  if (email) document.getElementById('editEmail').value = email;
+  onRecipientFieldChange();
+  alert(`🎯 Applied hiring manager: ${name} (${email}) as email recipient!`);
+}
+
+async function refreshSelectedCompanyLinkedInContacts() {
+  if (!state.selectedRecipient) return;
+  const company = state.selectedRecipient.company;
+  const link = state.selectedRecipient.link;
+  const container = document.getElementById('hiringManagersList');
+  if (container) {
+    container.innerHTML = '<div style="grid-column: 1 / -1; padding: 0.5rem; text-align: center; color: #a5b4fc; font-size: 0.75rem;">⏳ Searching LinkedIn for top 3 hiring managers...</div>';
+  }
+
+  try {
+    const res = await fetch('/api/outreach/linkedin-contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, link })
+    });
+    const json = await res.json();
+    if (json.success && json.contacts) {
+      state.selectedRecipient.linkedinContacts = json.contacts;
+      // also update in global outreach list
+      const qItem = (state.outreach.recipients || []).find(r => r.id === state.selectedRecipient.id);
+      if (qItem) qItem.linkedinContacts = json.contacts;
+      renderHiringManagersForRecipient(state.selectedRecipient);
+      filterOutreachRecipients();
+    }
+  } catch (err) {
+    alert(`Error fetching LinkedIn contacts: ${err.message}`);
+  }
 }
 
 function switchEditorTab(tab) {
@@ -1228,10 +1335,76 @@ function confirmBatchSend() {
   openBatchDispatchModal();
 }
 
+function estimateCompanyTimezone(c) {
+  const text = [(c.location || ''), (c.company || ''), (c.link || ''), (c.role || '')].join(' ').toLowerCase();
+  if (text.includes('london') || text.includes('uk')) return { tz: 'Europe/London', label: 'London (GMT)' };
+  if (text.includes('berlin') || text.includes('germany') || text.includes('paris') || text.includes('amsterdam') || text.includes('zurich')) return { tz: 'Europe/Berlin', label: 'Europe (CET)' };
+  if (text.includes('bangalore') || text.includes('bengaluru') || text.includes('mumbai') || text.includes('india') || text.includes('delhi') || text.includes('pune')) return { tz: 'Asia/Kolkata', label: 'India (IST)' };
+  if (text.includes('singapore')) return { tz: 'Asia/Singapore', label: 'Singapore (SGT)' };
+  if (text.includes('tokyo') || text.includes('japan')) return { tz: 'Asia/Tokyo', label: 'Tokyo (JST)' };
+  if (text.includes('sydney') || text.includes('australia')) return { tz: 'Australia/Sydney', label: 'Sydney (AEST)' };
+  if (text.includes('new york') || text.includes('nyc') || text.includes('boston') || text.includes('toronto')) return { tz: 'America/New_York', label: 'US East (EST)' };
+  if (text.includes('chicago') || text.includes('austin') || text.includes('dallas')) return { tz: 'America/Chicago', label: 'US Central (CST)' };
+  if (text.includes('denver')) return { tz: 'America/Denver', label: 'US Mountain (MST)' };
+  return { tz: 'America/Los_Angeles', label: 'US Pacific (PST)' };
+}
+
+const WEEKDAY_NAMES_MAP = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function getScheduledSlotText(targetWeekday = 2, targetHour = 9) {
+  const now = new Date();
+  const currentDay = now.getDay();
+  let days = (targetWeekday - currentDay + 7) % 7;
+  if (days === 0 && now.getHours() >= targetHour) days = 7;
+  const target = new Date(now);
+  target.setDate(now.getDate() + days);
+  const dayName = WEEKDAY_NAMES_MAP[targetWeekday] || 'Tuesday';
+  const ampm = targetHour >= 12 ? 'PM' : 'AM';
+  const displayHour = targetHour > 12 ? targetHour - 12 : (targetHour === 0 ? 12 : targetHour);
+  const timeStr = `${displayHour}:00 ${ampm}`;
+  return `${dayName} ${target.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${timeStr}`;
+}
+
+function onBatchScheduleConfigChange() {
+  const daySelect = document.getElementById('batchScheduleDaySelect');
+  const hourSelect = document.getElementById('batchScheduleHourSelect');
+  const dayIndex = parseInt(daySelect?.value || '2');
+  const hourIndex = parseInt(hourSelect?.value || '9');
+  const dayName = WEEKDAY_NAMES_MAP[dayIndex] || 'Tuesday';
+  const ampm = hourIndex >= 12 ? 'PM' : 'AM';
+  const displayHour = hourIndex > 12 ? hourIndex - 12 : (hourIndex === 0 ? 12 : hourIndex);
+  const timeStr = `${displayHour}:00 ${ampm}`;
+
+  const header = document.getElementById('batchModalSlotHeader');
+  if (header) {
+    header.textContent = `Local Timezone & ${dayName} Slot`;
+  }
+
+  const btnSchedule = document.getElementById('btnScheduleTuesdayBatch');
+  if (btnSchedule) {
+    btnSchedule.textContent = `📅 Schedule ${dayName} ${timeStr} (Local Timezones)`;
+  }
+
+  renderBatchModal();
+}
+
 function renderBatchModal() {
   const targets = state.activeBatchTargets;
   const tbody = document.getElementById('batchModalTableBody');
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const dayIndex = parseInt(document.getElementById('batchScheduleDaySelect')?.value || '2');
+  const hourIndex = parseInt(document.getElementById('batchScheduleHourSelect')?.value || '9');
+  const slotText = getScheduledSlotText(dayIndex, hourIndex);
+  const dayName = WEEKDAY_NAMES_MAP[dayIndex] || 'Tuesday';
+  const ampm = hourIndex >= 12 ? 'PM' : 'AM';
+  const displayHour = hourIndex > 12 ? hourIndex - 12 : (hourIndex === 0 ? 12 : hourIndex);
+  const timeStr = `${displayHour}:00 ${ampm}`;
+
+  const btnSchedule = document.getElementById('btnScheduleTuesdayBatch');
+  if (btnSchedule) {
+    btnSchedule.textContent = `📅 Schedule ${dayName} ${timeStr} (Local Timezones)`;
+  }
 
   let validCount = 0;
   let invalidCount = 0;
@@ -1247,16 +1420,36 @@ function renderBatchModal() {
       invalidCount++;
     }
 
+    const tzInfo = estimateCompanyTimezone(t);
+
+    const linkedinBadges = (t.linkedinContacts || []).slice(0, 3).map(c => {
+      const lid = c.linkedinId || (c.linkedinUrl ? c.linkedinUrl.split('/in/').pop()?.split('?')[0]?.replace(/\/$/, '') : 'hiring-manager');
+      const lUrl = c.linkedinUrl || `https://www.linkedin.com/in/${lid}`;
+      return `
+        <a href="${lUrl}" target="_blank" rel="noopener noreferrer" class="linkedin-chip-batch" title="${escapeHtml(c.title || 'Hiring Manager')}: ${escapeHtml(c.name || '')}">
+          👔 in/${escapeHtml(lid)}
+        </a>
+      `;
+    }).join('') || '<span class="text-dim text-xs">👔 Hiring Team</span>';
+
     return `
       <tr>
         <td>${idx + 1}</td>
         <td><strong>${escapeHtml(t.company)}</strong></td>
-        <td>${escapeHtml(t.name || 'Hiring Team')}</td>
         <td>
-          <input type="email" class="input-meta font-mono" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; width: 220px; ${!isValid ? 'border-color: #f43f5e;' : ''}" 
+          <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+            ${linkedinBadges}
+          </div>
+        </td>
+        <td>
+          <input type="email" class="input-meta font-mono" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; width: 190px; ${!isValid ? 'border-color: #f43f5e;' : ''}" 
                  value="${escapeHtml(email)}" 
                  placeholder="Enter corporate email..."
                  onchange="updateBatchRecipientEmail(${idx}, this.value)">
+        </td>
+        <td>
+          <div style="font-size: 0.8rem; font-weight: 600; color: #a5b4fc;">📅 ${slotText}</div>
+          <div class="text-dim text-xs">${tzInfo.label} (${tzInfo.tz})</div>
         </td>
         <td>
           ${isValid 
@@ -1285,21 +1478,34 @@ function renderBatchModal() {
     warningBox.style.display = 'flex';
     document.getElementById('batchWarningText').textContent = 
       `${invalidCount} recipient(s) have missing or placeholder emails. Enterprise rules require real corporate emails for all batch items. Click "Remove All Invalid" or enter valid emails above before dispatching.`;
-    btnExecute.disabled = true;
-    btnExecute.style.opacity = '0.5';
-    btnExecute.style.cursor = 'not-allowed';
+    if (btnExecute) {
+      btnExecute.disabled = true;
+      btnExecute.style.opacity = '0.5';
+      btnExecute.style.cursor = 'not-allowed';
+    }
+    if (btnSchedule) {
+      btnSchedule.disabled = true;
+      btnSchedule.style.opacity = '0.5';
+      btnSchedule.style.cursor = 'not-allowed';
+    }
   } else {
     warningBox.style.display = 'none';
-    btnExecute.disabled = false;
-    btnExecute.style.opacity = '1';
-    btnExecute.style.cursor = 'pointer';
+    if (btnExecute) {
+      btnExecute.disabled = false;
+      btnExecute.style.opacity = '1';
+      btnExecute.style.cursor = 'pointer';
+    }
+    if (btnSchedule) {
+      btnSchedule.disabled = false;
+      btnSchedule.style.opacity = '1';
+      btnSchedule.style.cursor = 'pointer';
+    }
   }
 }
 
 function updateBatchRecipientEmail(index, newEmail) {
   if (state.activeBatchTargets[index]) {
     state.activeBatchTargets[index].email = newEmail.trim();
-    // Also sync to main queue
     const targetId = state.activeBatchTargets[index].id;
     const qItem = (state.outreach.recipients || []).find(r => r.id === targetId);
     if (qItem) qItem.email = newEmail.trim();
@@ -1340,6 +1546,84 @@ function removeInvalidRecipientsFromBatch() {
     closeBatchDispatchModal();
   } else {
     renderBatchModal();
+  }
+}
+
+async function executeScheduleTuesdayBatch() {
+  const targets = state.activeBatchTargets;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const fromName = (document.getElementById('editSenderName')?.value || state.senderName || 'Yash Giradkar').trim();
+  const fromEmail = (document.getElementById('editSenderEmail')?.value || state.senderEmail || 'yashgiradkar02@gmail.com').trim();
+  const attachmentPath = (document.getElementById('editAttachmentPath')?.value || state.attachmentPath || './Yash_Giradkar_Resume.pdf').trim();
+
+  // Validate entire batch before schedule
+  const invalid = targets.filter(t => {
+    const e = (t.email || '').trim().toLowerCase();
+    return !e || !emailRegex.test(e) || e.endsWith('@example.com') || e.endsWith('@placeholder.com') || e.endsWith('@test.com');
+  });
+
+  if (invalid.length > 0) {
+    alert(`Cannot schedule batch: ${invalid.length} recipient(s) still have invalid/missing emails (${invalid.map(i => i.company).join(', ')}). Please provide real emails.`);
+    return;
+  }
+
+  const batchPayload = targets.map(t => {
+    let subject = t.customSubject || `${fromName} — Generative AI & Backend Systems (${t.role || 'Engineer'} at ${t.company})`;
+    let body = t.customBody || document.getElementById('editEmailBody')?.value || '';
+
+    const replaceTokens = (str) => {
+      return str
+        .replace(/\{\{company\}\}/gi, t.company || 'Company')
+        .replace(/\{\{name\}\}/gi, t.name || 'Hiring Team')
+        .replace(/\{\{role\}\}/gi, t.role || 'Generative AI & Backend Engineer')
+        .replace(/\{\{senderName\}\}/gi, fromName)
+        .replace(/\{\{link\}\}/gi, t.link || '#');
+    };
+
+    subject = replaceTokens(subject);
+    body = replaceTokens(body);
+
+    return {
+      id: t.id,
+      to: t.email.trim(),
+      fromName,
+      fromEmail,
+      attachmentPath,
+      recipientName: t.name || 'Hiring Team',
+      company: t.company,
+      location: t.location || '',
+      link: t.link || '',
+      role: t.role || 'Generative AI & Backend Systems Engineer',
+      subject,
+      html: body,
+      text: stripHtml(body)
+    };
+  });
+
+  const scheduledDay = parseInt(document.getElementById('batchScheduleDaySelect')?.value || '2');
+  const scheduledHour = parseInt(document.getElementById('batchScheduleHourSelect')?.value || '9');
+
+  closeBatchDispatchModal();
+
+  try {
+    const res = await fetch('/api/outreach/schedule-tuesday', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch: batchPayload, scheduledDay, scheduledHour })
+    });
+    const json = await res.json();
+    if (json.success) {
+      const dayName = json.dayName || 'Target Day';
+      const ampm = (json.scheduledHour ?? 9) >= 12 ? 'PM' : 'AM';
+      const displayHour = (json.scheduledHour ?? 9) > 12 ? (json.scheduledHour - 12) : ((json.scheduledHour ?? 9) === 0 ? 12 : (json.scheduledHour ?? 9));
+      alert(`🎉 Successfully scheduled ${json.scheduledList.length} emails for ${dayName} ${displayHour}:00 ${ampm} across respective company timezones!\n\nOpen the "📅 Scheduled" panel in the toolbar to inspect countdowns.`);
+      loadOutreachData();
+      loadScheduledEmailsCount();
+    } else {
+      alert(`Scheduling error: ${json.error}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message}`);
   }
 }
 
@@ -1472,8 +1756,133 @@ async function loadMongoLogsAndContacts() {
         historyTbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No emails sent yet in MongoDB database.</td></tr>';
       }
     }
+
+    // 3. Fetch scheduled count
+    loadScheduledEmailsCount();
   } catch (err) {
     console.error('Error loading MongoDB logs:', err);
+  }
+}
+
+async function loadScheduledEmailsCount() {
+  try {
+    const res = await fetch('/api/outreach/scheduled');
+    const json = await res.json();
+    if (json.success) {
+      const activeCount = (json.scheduledEmails || []).filter(j => j.status === 'scheduled').length;
+      const el = document.getElementById('scheduledJobsCount');
+      if (el) el.textContent = activeCount;
+      const modalEl = document.getElementById('scheduledModalCount');
+      if (modalEl) modalEl.textContent = activeCount;
+    }
+  } catch (err) {
+    console.error('Error loading scheduled emails count:', err);
+  }
+}
+
+async function openScheduledEmailsModal() {
+  const modal = document.getElementById('scheduledEmailsModal');
+  if (modal) modal.classList.add('active');
+  await loadScheduledEmails();
+}
+
+function closeScheduledEmailsModal() {
+  const modal = document.getElementById('scheduledEmailsModal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function loadScheduledEmails() {
+  const tbody = document.getElementById('scheduledModalTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-muted"><div class="spinner-sm"></div> Fetching scheduled emails from MongoDB...</td></tr>';
+
+  try {
+    const res = await fetch('/api/outreach/scheduled');
+    const json = await res.json();
+    if (!json.success || !json.scheduledEmails || json.scheduledEmails.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-muted">No scheduled emails in queue. Click "🚀 Send Approved Batch" and select "📅 Schedule Tuesday 9 AM" to queue jobs!</td></tr>';
+      document.getElementById('scheduledModalCount').textContent = '0';
+      document.getElementById('scheduledJobsCount').textContent = '0';
+      return;
+    }
+
+    const activeCount = json.scheduledEmails.filter(j => j.status === 'scheduled').length;
+    document.getElementById('scheduledModalCount').textContent = activeCount;
+    document.getElementById('scheduledJobsCount').textContent = activeCount;
+
+    tbody.innerHTML = json.scheduledEmails.map(job => {
+      const statusBadge = job.status === 'scheduled'
+        ? '<span class="badge badge-indigo">⏳ Scheduled</span>'
+        : job.status === 'sent'
+        ? '<span class="badge badge-emerald">✓ Sent</span>'
+        : job.status === 'failed'
+        ? '<span class="badge badge-rose">❌ Failed</span>'
+        : '<span class="badge badge-secondary">Cancelled</span>';
+
+      const isPending = job.status === 'scheduled';
+
+      return `
+        <tr>
+          <td><strong>${escapeHtml(job.company)}</strong></td>
+          <td>${escapeHtml(job.recipientName || 'Hiring Team')}</td>
+          <td><span class="font-mono text-xs" style="color: #a5b4fc;">${escapeHtml(job.toEmail)}</span></td>
+          <td><span class="badge badge-secondary badge-xs">${escapeHtml(job.timezone || 'UTC')}</span></td>
+          <td style="font-size: 0.8rem; font-weight: 600; color: #e2e8f0;">${escapeHtml(job.scheduledLocal || '')}</td>
+          <td><span class="badge badge-warning badge-xs font-mono">${escapeHtml(job.countdown || '')}</span></td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">
+            ${isPending ? `
+              <button class="btn btn-xs btn-outline btn-rose" onclick="cancelScheduledEmail('${job._id}')" title="Cancel this scheduled dispatch">
+                🛑 Cancel
+              </button>
+            ` : '<span class="text-dim text-xs">—</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-rose">Error loading scheduled emails: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function cancelScheduledEmail(id) {
+  if (!confirm('Are you sure you want to cancel this scheduled email?')) return;
+  try {
+    const res = await fetch('/api/outreach/scheduled/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const json = await res.json();
+    if (json.success) {
+      loadScheduledEmails();
+      loadScheduledEmailsCount();
+    } else {
+      alert(`Error cancelling: ${json.error}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+}
+
+async function cancelAllScheduledEmails() {
+  if (!confirm('Are you sure you want to cancel ALL pending scheduled emails?')) return;
+  try {
+    const res = await fetch('/api/outreach/scheduled/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true })
+    });
+    const json = await res.json();
+    if (json.success) {
+      alert(`Cancelled ${json.count || 0} scheduled email(s).`);
+      loadScheduledEmails();
+      loadScheduledEmailsCount();
+    } else {
+      alert(`Error: ${json.error}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message}`);
   }
 }
 

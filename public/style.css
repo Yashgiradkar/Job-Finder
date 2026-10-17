@@ -604,9 +604,13 @@ body {
 .badge-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 .badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
 .badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-indigo { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); }
 .badge-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
 .badge-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
 .badge-purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+.badge-xs { font-size: 0.68rem; padding: 0.1rem 0.45rem; }
+.badge-sm { font-size: 0.72rem; padding: 0.15rem 0.5rem; }
 
 .score-badge {
   font-size: 0.85rem;
@@ -2346,6 +2350,83 @@ body {
 
 .recent-done-list li {
   margin-bottom: 0.35rem;
+}
+
+/* LinkedIn Hiring Manager Chips & Cards */
+.linkedin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(10, 102, 194, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.linkedin-chip:hover {
+  background: rgba(14, 165, 233, 0.3);
+  color: #fff;
+  border-color: #38bdf8;
+  text-decoration: none;
+}
+.linkedin-chip-batch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: rgba(10, 102, 194, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  text-decoration: none;
+  white-space: nowrap;
+  margin: 0.1rem 0.15rem 0.1rem 0;
+}
+.linkedin-chip-batch:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #fff;
+  text-decoration: none;
+}
+.hiring-card-item {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.hiring-card-item:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(30, 41, 59, 0.85);
+}
+.hiring-card-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.2;
+}
+.hiring-card-title {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+.hiring-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 

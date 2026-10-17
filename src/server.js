@@ -21,6 +21,18 @@ import {
 } from './db/mongo.js';
 import { enrichCompanyContacts } from './outreach/contactEnricher.js';
 import { enhanceEmailWithPrompt, fetchCompanyLiveIntel } from './outreach/aiEnhancer.js';
+import { 
+  detectCompanyTimezone, 
+  getNextTuesdayMorningUtc, 
+  getNextWeekdayMorningUtc,
+  saveScheduledEmail, 
+  getDueScheduledEmails, 
+  updateScheduledEmailStatus, 
+  getScheduledEmails, 
+  cancelScheduledEmail, 
+  cancelAllScheduledEmails, 
+  formatCountdown 
+} from './outreach/scheduler.js';
 import { config } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -325,10 +337,37 @@ app.get('/api/outreach', async (req, res) => {
       try { history = JSON.parse(await fs.readFile(historyPath, 'utf-8')); } catch {}
     }
 
+    // Attach 3 hiring manager LinkedIn contacts with IDs & hyperlinks to each company
+    const enrichedRecipients = await Promise.all(queue.map(async (r) => {
+      try {
+        let contacts = await getCompanyContacts(r.company);
+        if (!contacts || contacts.length < 3) {
+          contacts = await enrichCompanyContacts(r.company, r.link);
+        }
+        const top3 = (contacts || []).slice(0, 3).map(c => {
+          const lid = c.linkedinId || (c.linkedinUrl ? c.linkedinUrl.split('/in/').pop()?.split('?')[0]?.replace(/\/$/, '') : null);
+          return {
+            name: c.name,
+            title: c.title,
+            email: c.email,
+            linkedinUrl: c.linkedinUrl || (lid ? `https://www.linkedin.com/in/${lid}` : null),
+            linkedinId: lid,
+            location: c.location
+          };
+        });
+        return {
+          ...r,
+          linkedinContacts: top3
+        };
+      } catch {
+        return r;
+      }
+    }));
+
     res.json({
       success: true,
       sheetNames,
-      recipients: queue,
+      recipients: enrichedRecipients,
       history,
       targetTestEmail: config.email.to || config.email.user,
       resumePath: process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
@@ -1044,6 +1083,290 @@ app.get('/api/contacts', async (req, res) => {
   }
 });
 
+// --------------------------------------------------------------------------
+// API: Tuesday Morning Timezone-Aware Outreach Scheduler
+// --------------------------------------------------------------------------
+
+// Preview timezones and calculated morning slots (Tue/Wed/Thu, etc.) for companies
+app.post('/api/outreach/preview-schedule-timezones', (req, res) => {
+  try {
+    const { companies = [], scheduledDay = 2, scheduledHour = 9 } = req.body;
+    const dayIndex = Math.min(6, Math.max(0, parseInt(scheduledDay) ?? 2));
+    const hourIndex = Math.min(23, Math.max(0, parseInt(scheduledHour) ?? 9));
+    const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayName = DAY_NAMES[dayIndex] || 'Tuesday';
+
+    const results = companies.map(c => {
+      const tz = detectCompanyTimezone(c);
+      const slot = getNextWeekdayMorningUtc(tz, dayIndex, hourIndex);
+      return {
+        company: c.company,
+        location: c.location,
+        timezone: tz,
+        scheduledLocal: slot.localTimeStr,
+        scheduledUtc: slot.scheduledUtc,
+        dayName,
+        scheduledHour: hourIndex,
+        countdown: formatCountdown(slot.scheduledUtc)
+      };
+    });
+    res.json({ success: true, timezones: results, dayName, scheduledHour: hourIndex });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Schedule batch of emails for Tuesday 9 AM in each company's timezone
+app.post('/api/outreach/schedule-tuesday', async (req, res) => {
+  try {
+    const { batch, scheduledDay = 2, scheduledHour = 9 } = req.body;
+    // scheduledDay: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+    // scheduledHour: 0-23 local time
+    const dayIndex = Math.min(6, Math.max(0, parseInt(scheduledDay) || 2));
+    const hourIndex = Math.min(23, Math.max(0, parseInt(scheduledHour) || 9));
+    const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayName = DAY_NAMES[dayIndex] || 'Tuesday';
+
+    if (!Array.isArray(batch) || batch.length === 0) {
+      return res.status(400).json({ success: false, error: 'No recipients provided in batch.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const validationErrors = [];
+    batch.forEach((item, idx) => {
+      const to = (item.to || '').trim().toLowerCase();
+      if (!to || !emailRegex.test(to) || to.endsWith('@example.com') || to.endsWith('@placeholder.com') || to.endsWith('@test.com')) {
+        validationErrors.push(`[#${idx + 1} ${item.company || 'Company'}] Invalid or placeholder email: "${item.to}"`);
+      }
+      if (!item.subject || !item.subject.trim()) {
+        validationErrors.push(`[#${idx + 1} ${item.company || 'Company'}] Missing subject`);
+      }
+      if (!item.html || !item.html.trim()) {
+        validationErrors.push(`[#${idx + 1} ${item.company || 'Company'}] Missing email body`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Validation failed for scheduled batch:\n${validationErrors.join('\n')}`
+      });
+    }
+
+    const queue = await getOutreachQueue();
+    const scheduledList = [];
+
+    for (const item of batch) {
+      const tz = detectCompanyTimezone({
+        company: item.company,
+        location: item.location,
+        link: item.link,
+        role: item.role
+      });
+
+      const nextSlot = getNextWeekdayMorningUtc(tz, dayIndex, hourIndex);
+
+      const jobRecord = await saveScheduledEmail({
+        company: item.company,
+        recipientName: item.recipientName || 'Hiring Team',
+        toEmail: item.to.trim(),
+        fromName: item.fromName || 'Yash Giradkar',
+        fromEmail: item.fromEmail || config.email.user,
+        role: item.role,
+        subject: item.subject,
+        html: item.html,
+        text: item.text,
+        attachmentPath: item.attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
+        timezone: tz,
+        scheduledUtc: nextSlot.scheduledUtc,
+        scheduledLocal: nextSlot.localTimeStr,
+        scheduledDay: dayIndex,
+        scheduledHour: hourIndex
+      });
+
+      if (jobRecord) {
+        scheduledList.push({
+          company: item.company,
+          to: item.to,
+          timezone: tz,
+          scheduledLocal: nextSlot.localTimeStr,
+          scheduledUtc: nextSlot.scheduledUtc,
+          dayName,
+          scheduledHour: hourIndex
+        });
+
+        // Update queue item status to 'scheduled'
+        const qItem = queue.find(q => q.id === item.id || (q.company && q.company.toLowerCase() === (item.company || '').toLowerCase()));
+        if (qItem) {
+          qItem.status = 'scheduled';
+          qItem.scheduledFor = nextSlot.localTimeStr;
+          qItem.scheduledUtc = nextSlot.scheduledUtc.toISOString();
+        }
+      }
+    }
+
+    await saveOutreachQueue(queue);
+    broadcastLog(`📅 Scheduled ${scheduledList.length} email(s) for ${dayName} ${String(hourIndex).padStart(2,'0')}:00 AM across local company timezones!`, 'success');
+
+    res.json({
+      success: true,
+      message: `Scheduled ${scheduledList.length} email(s) for ${dayName} ${String(hourIndex).padStart(2,'0')}:00 in each company's local timezone.`,
+      scheduledList,
+      dayName,
+      scheduledHour: hourIndex
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API: Get top 3 LinkedIn hiring manager profiles for a company
+app.post('/api/outreach/linkedin-contacts', async (req, res) => {
+  try {
+    const { company, link } = req.body;
+    if (!company) {
+      return res.status(400).json({ success: false, error: 'Company name is required.' });
+    }
+    // Use existing enricher which already does LinkedIn scraping
+    const contacts = await enrichCompanyContacts(company, link);
+    // Return at most 3 with LinkedIn URLs highlighted
+    const top3 = contacts.slice(0, 3).map(c => {
+      const lid = c.linkedinId || (c.linkedinUrl ? c.linkedinUrl.split('/in/').pop()?.split('?')[0]?.replace(/\/$/, '') : null);
+      return {
+        name: c.name,
+        title: c.title,
+        email: c.email,
+        linkedinUrl: c.linkedinUrl || (lid ? `https://www.linkedin.com/in/${lid}` : null),
+        linkedinId: lid,
+        location: c.location,
+        company: c.company || company
+      };
+    });
+    res.json({ success: true, contacts: top3, company });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get all scheduled emails
+app.get('/api/outreach/scheduled', async (req, res) => {
+  try {
+    const list = await getScheduledEmails(200);
+    const enriched = list.map(item => ({
+      ...item,
+      countdown: formatCountdown(item.scheduledUtc)
+    }));
+    res.json({ success: true, count: list.length, scheduledEmails: enriched });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Cancel scheduled email(s)
+app.post('/api/outreach/scheduled/cancel', async (req, res) => {
+  try {
+    const { id, all } = req.body;
+    if (all) {
+      const count = await cancelAllScheduledEmails();
+      broadcastLog(`🛑 Cancelled all (${count}) scheduled email jobs.`, 'warn');
+      return res.json({ success: true, count, message: `Cancelled all ${count} scheduled emails.` });
+    }
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'Missing scheduled job id.' });
+    }
+    const ok = await cancelScheduledEmail(id);
+    if (ok) {
+      broadcastLog(`🛑 Cancelled scheduled job ${id}.`, 'warn');
+      res.json({ success: true, message: 'Scheduled email cancelled.' });
+    } else {
+      res.status(404).json({ success: false, error: 'Job not found or already executed.' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Background runner for Tuesday Morning Scheduler
+function initSchedulerRunner() {
+  console.log('⏰ [Scheduler] Tuesday Morning Timezone Scheduler runner initialized (interval: 60s)');
+  setInterval(async () => {
+    try {
+      const dueJobs = await getDueScheduledEmails();
+      if (!dueJobs || dueJobs.length === 0) return;
+
+      broadcastLog(`⏰ [Scheduler] Found ${dueJobs.length} scheduled email(s) ready to fire now!`, 'system');
+      const transporter = createTransporter();
+      const queue = await getOutreachQueue();
+
+      for (const job of dueJobs) {
+        broadcastLog(`🚀 [Scheduler] Sending scheduled Tuesday email to ${job.recipientName || 'Hiring Team'} at ${job.company} (${job.toEmail})...`, 'info');
+        
+        const sendRes = await sendOutreachEmail(transporter, {
+          to: job.toEmail,
+          fromName: job.fromName || 'Yash Giradkar',
+          fromEmail: job.fromEmail || config.email.user,
+          subject: job.subject,
+          html: job.html,
+          text: job.text || (job.html ? job.html.replace(/<[^>]+>/g, ' ') : ''),
+          attachmentPath: job.attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf'
+        });
+
+        if (sendRes.success) {
+          await recordSent({
+            email: job.toEmail,
+            name: job.recipientName || '',
+            company: job.company || 'Company',
+            role: job.role || '',
+            subject: job.subject,
+            timestamp: new Date().toISOString()
+          });
+
+          await saveOutreachLog({
+            company: job.company || 'Company',
+            recipientName: job.recipientName || '',
+            toEmail: job.toEmail,
+            fromName: job.fromName || 'Yash Giradkar',
+            fromEmail: job.fromEmail || config.email.user,
+            role: job.role || '',
+            subject: job.subject,
+            html: job.html,
+            text: job.text || (job.html ? job.html.replace(/<[^>]+>/g, ' ') : ''),
+            attachmentPath: job.attachmentPath || process.env.RESUME_PATH || './Yash_Giradkar_Resume.pdf',
+            location: job.timezone || 'Remote / Hybrid',
+            status: 'sent',
+            messageId: sendRes.messageId,
+            source: 'scheduled_tuesday_dispatcher'
+          });
+
+          await updateScheduledEmailStatus(job._id, 'sent', {
+            sentAt: new Date(),
+            messageId: sendRes.messageId
+          });
+
+          const qItem = queue.find(q => q.email === job.toEmail || q.company === job.company);
+          if (qItem) {
+            qItem.status = 'sent';
+            qItem.sentAt = new Date().toISOString();
+            await saveOutreachQueue(queue);
+          }
+
+          broadcastLog(`✅ [Scheduler] Tuesday dispatch delivered to ${job.toEmail} (${job.company})! ID: ${sendRes.messageId}`, 'success');
+        } else {
+          await updateScheduledEmailStatus(job._id, 'failed', {
+            error: sendRes.error,
+            failedAt: new Date()
+          });
+          broadcastLog(`❌ [Scheduler] Error sending scheduled email to ${job.toEmail}: ${sendRes.error}`, 'error');
+        }
+
+        await delayWithJitter(10000, 3000);
+      }
+    } catch (err) {
+      console.error('[Scheduler Runner Error]:', err.message);
+    }
+  }, 60000);
+}
+
 
 // --------------------------------------------------------------------------
 // API: Update Application Queue Status (Approve / Reject / Apply)
@@ -1188,6 +1511,7 @@ app.listen(PORT, async () => {
   console.log(`======================================================\n`);
   try {
     await connectDB();
+    initSchedulerRunner();
   } catch (err) {
     console.error('[MongoDB Startup Error]:', err.message);
   }
